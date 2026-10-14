@@ -1,4 +1,4 @@
-# Aurora • Facebook Studio 2.0.3
+# Aurora • Facebook Studio 2.0.4
 
 The Facebook preview UI now runs a task engine adapted from the current Instagram and TikTok studios, with a Facebook-specific URL planner, DOM discovery and confirmed actions. Existing popup, floating panel, dark/light theme, saved setups, history, debug reports and notifications are retained. No subscription or backend required.
 
@@ -39,7 +39,7 @@ Shares use Facebook's existing feed audience; Aurora does not change privacy set
 
 ## Verification and practical limits
 
-23 planning/worker tests and 46 offline Chromium DOM/UI checks passed during development. Fixtures cover every action, no-action preview, nested comment controls, duplicate/uncertain sends, warning detection, input validation, caps, pause/resume/restart and live confirmation. Chrome APIs and Facebook page URLs/layouts are simulated in these tests. They do **not** establish live Facebook compatibility or installed-extension verification. Facebook's changing React controls, dialogs and layouts may require selector updates; actions pause when confirmation cannot be established. Start with one intended target in Preview, then one intended live action.
+23 planning/worker tests and 53 offline Chromium DOM/UI checks passed during development. Fixtures cover every action, no-action preview, nested comment controls, duplicate/uncertain sends, warning detection, input validation, caps, pause/resume/restart and live confirmation. Chrome APIs and Facebook page URLs/layouts are simulated in these tests. They do **not** establish live Facebook compatibility or installed-extension verification. Facebook's changing React controls, dialogs and layouts may require selector updates; actions pause when confirmation cannot be established. Start with one intended target in Preview, then one intended live action.
 
 Facebook is the only host permission. `scripting` is added to reattach missing content scripts after extension reload; other existing permissions remain. No cookies/password extraction, remote analytics or license checks are used.
 
@@ -53,11 +53,14 @@ No build is needed to load the extension. `npm install` installs Playwright for 
 
 See `WORKFLOW_REVIEW.md` for the reference comparison and implementation map.
 
-## Version 2.0.3
-Aurora’s floating button and paused toolbar badge stay blue. Preview is enabled as a normal checkbox in both popup and studio: checked previews; unchecked enables live tasks. The header shows v2.0.3. The repository main branch may still be the old locked-preview 1.0.0 build until the draft PR is merged; install this release package to test automation.
+## Version 2.0.4
+Aurora’s floating button and paused toolbar badge stay blue. Preview is enabled as a normal checkbox in both popup and studio: checked previews; unchecked enables live tasks. The header shows v2.0.4. The repository main branch may still be the old locked-preview 1.0.0 build until the draft PR is merged; install this release package to test automation.
 
-## Permalink compatibility in 2.0.3
+## Permalink compatibility in 2.0.4
 Preserves photo/photo.php destinations instead of converting fbid links into text-post permalinks. Post detection supports unlabelled permalink containers using a unique post reaction/Comment/Share action row, and excludes comment-only containers even when they contain a post permalink. Diagnostic logs retain allowlisted post identity query parameters and include article/link counts. Regression fixtures passed; the exact live layout reported by the user has not been inspected.
 
-## Photo theater in 2.0.3
+## Photo theater in 2.0.4
 Supports the photo viewer rendered beside an empty role=main element, using one uniquely identifiable Like / Leave a comment / Share action row outside main. Nested comment Likes stay excluded. Offline selector verification against the user-provided HTML (scripts removed, network blocked, hidden server-rendered staging wrapper revealed to simulate hydration) found the photo Like control, not a comment control. No live action or real Facebook confirmation was tested. The uploaded HTML is private scratch input and is not included in source, tests or release files.
+
+## Reaction chooser in 2.0.4
+Opens the native reaction palette with pointer and mouse events at the post button coordinates, then selects the requested accessible label (including labelled canvas/role-button layouts). The selector no longer depends on re-identifying the post container while the palette is open. It supports title, image and radio labels too; it never guesses an unlabeled icon by ordinal position. A chooser failure before the reaction click creates no action receipt. Legacy chooser-only receipts are cleared only when the same target and reaction have a matching logged no-click failure within the attempt window; uncertain sends remain blocked. Browser fixtures match the palette structure pasted by the user. Live Love confirmation still needs a one-target check.

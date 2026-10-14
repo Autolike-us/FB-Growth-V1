@@ -11,7 +11,7 @@ globalThis.AuroraReport={
    `${m.name} v${m.version}`,
    `Generated: ${new Date().toISOString()}`,
    `Browser: ${navigator.userAgent}`,
-   job?`Task: status=${job.status} action=${c.action} mode=${c.mode} preview=${!!c.dry} done=${job.done||0}/${c.limit} skipped=${job.skipped||0} steps-left=${job.queue?.length||0} retries=${job.retries||0} in-flight=${!!job.inFlight} delay=${c.delay}s dailyCap=${c.dailyCap||0} today=${daily?.count||0}`:'Task: none',
+   job?`Task: status=${job.status} action=${c.action} reaction=${c.reaction||"n/a"} mode=${c.mode} preview=${!!c.dry} done=${job.done||0}/${c.limit} skipped=${job.skipped||0} steps-left=${job.queue?.length||0} retries=${job.retries||0} in-flight=${!!job.inFlight} delay=${c.delay}s dailyCap=${c.dailyCap||0} today=${daily?.count||0}`:'Task: none',
    job?.message?`Last message: ${job.message}`:''
   ].filter(Boolean);
   const lines=debugLog.slice(-max).map(e=>`${this.stamp(e.t)} ${String(e.l||'info').toUpperCase().padEnd(5)} ${e.m}${e.d?'\n      '+String(e.d).replace(/\n/g,'\n      '):''}`);

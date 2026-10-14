@@ -53,6 +53,44 @@ const D=globalThis.AuroraDOM={
  author(root){return [...root.querySelectorAll('h2 a[href],h3 a[href],strong a[href],a[data-profile-link]')].filter(e=>this.visible(e)).map(e=>S.profileURL(e.href)).find(Boolean)||null;},
  actor(){return [...document.querySelectorAll('[role="banner"] a[href],nav a[href],[role="navigation"] a[href]')].filter(e=>this.visible(e)&&(/^(Your profile|Profile|Account)$/i.test(e.getAttribute('aria-label')||'')||e.querySelector('img[alt="Your profile"],img[alt="Your profile picture"]'))).map(e=>S.profileURL(e.href)).find(Boolean)||null;},
  reactionButton(root){const arr=this.ownControls(root).filter(e=>/^(Like|Love|Care|Haha|Wow|Sad|Angry|Remove (?:Like|Love|Care|Haha|Wow|Sad|Angry))$/.test(this.text(e)));return arr.length===1?arr[0]:null;},
+ reactionName(e){
+  const names=['Like','Love','Care','Haha','Wow','Sad','Angry'];
+  const values=[e.getAttribute('aria-label'),e.getAttribute('title'),e.getAttribute('data-reaction'),e.getAttribute('data-reaction-type'),e.textContent,...[...e.querySelectorAll('[aria-label],[title],img[alt]')].flatMap(n=>[n.getAttribute('aria-label'),n.getAttribute('title'),n.getAttribute('alt')])];
+  for(const value of values){const text=String(value||'').trim();const name=names.find(n=>new RegExp('^(?:React with |Remove )?'+n+'(?: reaction)?$','i').test(text));if(name)return name;}
+  return null;
+ },
+ hover(element){
+  element.scrollIntoView({block:'nearest',inline:'nearest'});
+  const r=element.getBoundingClientRect(),clientX=r.left+r.width/2,clientY=r.top+r.height/2;
+  const hit=document.elementFromPoint(clientX,clientY);const target=hit&&element.contains(hit)?hit:element;
+  const common={bubbles:true,view:window,clientX,clientY,relatedTarget:document.body};
+  target.dispatchEvent(new PointerEvent('pointerover',{...common,pointerType:'mouse',pointerId:1,isPrimary:true}));
+  target.dispatchEvent(new PointerEvent('pointerenter',{...common,pointerType:'mouse',pointerId:1,isPrimary:true}));
+  target.dispatchEvent(new MouseEvent('mouseover',common));target.dispatchEvent(new MouseEvent('mouseenter',common));
+ },
+ reactionPalette(target){
+  const canonical=['Like','Love','Care','Haha','Wow','Sad','Angry'];
+  const selector='button,[role="button"],[role="radio"],[role="menuitem"],[data-interactable*="|click|"]';
+  const tr=target.getBoundingClientRect();
+  const all=[...document.querySelectorAll(selector)].filter(e=>e!==target&&this.visible(e)&&!e.closest('[aria-label*="Comment by" i]')&&this.reactionName(e)&&Math.abs(e.getBoundingClientRect().top-tr.top)<220);
+  const palettes=[];
+  for(const item of all)for(let parent=item.parentElement,n=0;parent&&parent!==document.body&&n<8;parent=parent.parentElement,n++){
+   if(parent.matches('[role="article"],[role="main"],main'))break;
+   const items=all.filter(e=>parent.contains(e)).filter(e=>!all.some(a=>a!==e&&parent.contains(a)&&a.contains(e)));
+   if(items.length!==7||!canonical.every(name=>items.filter(e=>this.reactionName(e)===name).length===1))continue;
+   const sorted=canonical.map(name=>items.find(e=>this.reactionName(e)===name));if(!palettes.some(p=>p.items.every((e,j)=>e===sorted[j])))palettes.push({root:parent,items:sorted,names:canonical});break;
+  }
+  return palettes.length===1?palettes[0]:null;
+ },
+ reactionChoice(name,target){
+  const selector='button,[role="button"],[role="radio"],[role="menuitem"],[data-interactable*="|click|"]';
+  const near=e=>{const r=e.getBoundingClientRect(),t=target.getBoundingClientRect();return r.width>0&&r.height>0&&Math.abs(r.top-t.top)<220&&r.right>t.left-100&&r.left<t.right+650;};
+  const matches=[...document.querySelectorAll(selector)].filter(e=>e!==target&&this.visible(e)&&near(e)&&!e.closest('[aria-label*="Comment by" i]')&&this.reactionName(e)===name);
+  const outer=matches.filter(e=>!matches.some(a=>a!==e&&a.contains(e)));if(outer.length===1)return {element:outer[0],method:'label'};
+  const palette=this.reactionPalette(target);if(!palette)return null;
+  const i=['Like','Love','Care','Haha','Wow','Sad','Angry'].indexOf(name);if(i<0)return null;
+  return {element:palette.items[i],method:'native palette label'};
+ },
  reacted(button){if(!button)return null;if(button.getAttribute('aria-pressed')==='true'||/^Remove |^(Love|Care|Haha|Wow|Sad|Angry)$/.test(this.text(button)))return true;if(button.getAttribute('aria-pressed')==='false'||this.text(button)==='Like')return false;return null;},
  commentRows(root){return [...root.querySelectorAll('[role="article"]')].filter(e=>e!==root&&this.visible(e));},
  field(root){const arr=[...root.querySelectorAll('textarea,[contenteditable="true"][role="textbox"],div[contenteditable="true"][aria-label]')].filter(e=>this.visible(e)&&/comment/i.test(e.getAttribute('aria-label')||e.getAttribute('placeholder')||''));return arr.length===1?arr[0]:null;},
