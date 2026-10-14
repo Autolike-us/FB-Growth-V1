@@ -49,8 +49,10 @@ async function bumpDaily(){await chrome.storage.local.set({daily:{day:today(),co
 
 // Bring the task tab to the front so a captcha can be solved right away.
 async function focusTab(job){try{await chrome.tabs.update(job.tabId,{active:true});const t=await chrome.tabs.get(job.tabId);await chrome.windows.update(t.windowId,{focused:true,drawAttention:true});}catch{}}
+// Live mode is remembered in the studio form until the task is done; then the next form opens in Preview again.
+async function draftToPreview(){try{const {draft}=await chrome.storage.local.get('draft');if(draft&&draft.dry===false)await chrome.storage.local.set({draft:{...draft,dry:true}});}catch{}}
 async function finish(job){
- job.status='completed';job.message=`Session complete: ${job.done||0} ${job.config.dry?'previewed':'actions confirmed'}, ${job.skipped||0} skipped.`;
+ job.status='completed';if(!job.config.dry)await draftToPreview();job.message=`Session complete: ${job.done||0} ${job.config.dry?'previewed':'actions confirmed'}, ${job.skipped||0} skipped.`;
  await save(job);await log(job.message);await dlog('info','Task finished: '+job.message);await chrome.alarms.clear('step');await notify('Aurora finished ✓',job.message);
 }
 // Send a step to the task tab; if the content script is missing (extension reloaded, tab opened earlier), attach it once and retry.
@@ -191,7 +193,7 @@ chrome.runtime.onMessage.addListener((m,s,respond)=>{
   if(m.action==='resume')return resumeTask();
   const {job}=await chrome.storage.local.get('job');if(!job)throw Error('Create a task first.');
   if(m.action!=='pause'&&m.action!=='stop')throw Error('Unknown action.');
-  job.status=m.action==='pause'?'paused':'stopped';job.message=job.status+'. A click already sent may finish.';await chrome.alarms.clear('step');
+  job.status=m.action==='pause'?'paused':'stopped';if(m.action==='stop'&&!job.config.dry)await draftToPreview();job.message=job.status+'. A click already sent may finish.';await chrome.alarms.clear('step');
   await save(job);await dlog('info','You pressed '+m.action);return{ok:true,message:job.message};
  })().then(respond,e=>respond({ok:false,error:e.message}));return true;
 });
