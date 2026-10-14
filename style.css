@@ -137,8 +137,8 @@ body.popup{width:760px;height:600px;min-height:580px;overflow-y:auto}
 .popup input:not([type=checkbox]),.popup select,.popup textarea{padding:8px 10px;font-size:12px}
 .popup .fields{gap:0 10px}
 .popup footer{margin:12px 0;font-size:10px}
-/* Popup: pin the whole right column (Live session + Saved setups) as one block so the cards can never overlap; if it is taller than the window it scrolls inside itself. */
-.popup .grid>div:last-child{position:sticky;top:10px;align-self:start;max-height:calc(100vh - 92px);overflow-y:auto;padding-right:2px}
+/* Popup: one scrollbar only (the page's). The right column simply flows under the form instead of scrolling inside itself. */
+.popup .grid>div:last-child{align-self:start;min-width:0}
 .popup .hint{font-size:10px}
 .popup .banner{margin-top:12px;padding:12px 14px}
 .popup #task .startbar{position:fixed;bottom:0;left:0;width:760px;margin:0;padding:10px 20px 12px;border-radius:0;background:var(--solid);border-top:1px solid var(--border);z-index:5;box-shadow:0 -8px 24px -12px rgba(0,0,0,.25)}
@@ -239,6 +239,12 @@ nav button{display:flex;align-items:center;gap:8px;white-space:nowrap}
 nav .tabcount,nav .tabdot{margin-left:auto}
 /* popup: the form (with its fixed Start bar) must stack above the pinned right column */
 .popup #task{position:relative;z-index:6}
-.popup .grid>div:last-child{max-height:calc(100vh - 150px)}
 .popup .banner{flex-direction:column;align-items:flex-start;gap:10px}
 .popup .banner-actions{flex-wrap:wrap}
+
+/* never a horizontal scrollbar: long button labels wrap instead of overflowing */
+.setups button,.setups input,.setups select{min-width:0;max-width:100%}
+.setups .row button{white-space:normal;line-height:1.25}
+html,body{overflow-x:hidden}
+/* popup: a blurred (backdrop-filter) card becomes the containing block of position:fixed children, which pushed the Start bar 21px sideways. */
+.popup #task{backdrop-filter:none}

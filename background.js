@@ -187,12 +187,11 @@ async function allowReactionRetry(){
 chrome.runtime.onMessage.addListener((m,s,respond)=>{
  if(m.action==='nativeReactionClick'){nativeReactionClick(m,s).then(respond,e=>respond({ok:false,error:e.message,noClick:m.nativeDispatchStarted===false}));return true;}
  const ownPage=[chrome.runtime.getURL('dashboard.html'),chrome.runtime.getURL('popup.html')].includes(s.url?.split(/[?#]/)[0]);
- const panel=s.tab&&s.url?.startsWith(base)&&['openStudio','previewProfile','pause','resume','stop'].includes(m.action);
+ const panel=s.tab&&s.url?.startsWith(base)&&['openStudio','previewProfile','pause','resume','stop','skipTarget'].includes(m.action);
  if(s.id!==chrome.runtime.id||(!ownPage&&!panel)){respond({ok:false,error:'Dashboard commands only.'});return;}
  (async()=>{
   if(m.action==='openStudio'){await chrome.tabs.create({url:chrome.runtime.getURL('dashboard.html')});return{ok:true};}
   if(m.action==='previewProfile')m={action:'start',config:{action:'like',reaction:'👍 Like',mode:'users',target:m.target,perUser:3,limit:3,delay:30,dailyCap:0,exclude:'',dry:true}};
-  if(m.action==='skipTarget')return skipTarget();
   if(m.action==='recordSuccessfulReaction')return recordSuccessfulReaction();
   if(m.action==='allowReactionRetry')return allowReactionRetry();
   if(m.action==='save'){await chrome.storage.local.set({config:m.config});return{ok:true};}
@@ -204,7 +203,8 @@ chrome.runtime.onMessage.addListener((m,s,respond)=>{
    await save(job);await log(job.message);await dlog('info',job.message,{action:config.action,reaction:config.reaction,mode:config.mode,target:String(config.target||'').slice(0,200),limit:config.limit,perUser:config.perUser,scanLimit:config.scanLimit,delay:config.delay,dailyCap:config.dailyCap,preview:config.dry,steps:queue.length});await schedule(job);return{ok:true,message:job.message};
   }
 
-  if(panel&&['pause','resume','stop'].includes(m.action)){const {job}=await chrome.storage.local.get('job');if(job?.tabId!==s.tab.id)throw Error('Open the task tab to control this session.');}
+  if(panel&&['pause','resume','stop','skipTarget'].includes(m.action)){const {job}=await chrome.storage.local.get('job');if(job?.tabId!==s.tab.id)throw Error('Open the task tab to control this session.');}
+  if(m.action==='skipTarget')return skipTarget();
   if(m.action==='resume')return resumeTask();
   const {job}=await chrome.storage.local.get('job');if(!job)throw Error('Create a task first.');
   if(m.action!=='pause'&&m.action!=='stop')throw Error('Unknown action.');

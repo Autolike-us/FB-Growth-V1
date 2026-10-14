@@ -195,6 +195,10 @@ check('browser fixtures produce no uncaught page errors',!errors.length);await p
   let overlap=false,seen=0;
   for(const y of [0,150,300,600,900,1500]){await pp.evaluate(y=>window.scrollTo(0,y),y);await pp.waitForTimeout(80);const r=await pp.evaluate(()=>{const a=document.querySelector('article.live').getBoundingClientRect(),b=document.querySelector('article.setups').getBoundingClientRect();return{liveBottom:a.bottom,setupsTop:b.top,setupsBottom:b.bottom,liveTop:a.top};});seen++;if(r.setupsTop<r.liveBottom-1)overlap=true;}
   check('popup: Saved setups never overlaps the Live session card while scrolling',!overlap&&seen===6);
+  // one scrollbar only: nothing but the page itself may scroll vertically, and nothing may scroll sideways
+  await pp.evaluate(y=>window.scrollTo(0,0),0);
+  const bars=await pp.evaluate(()=>{const inner=[...document.querySelectorAll('body *')].filter(e=>/auto|scroll/.test(getComputedStyle(e).overflowY)&&e.scrollHeight>e.clientHeight+2).map(e=>e.tagName+'.'+e.className);return{inner,sideways:document.documentElement.scrollWidth>document.documentElement.clientWidth+1||document.body.scrollWidth>document.body.clientWidth+1};});
+  check('popup: no inner scrollbars (only the page scrolls) and no horizontal scrollbar',bars.inner.length===0&&!bars.sideways);
   await pp.close();await pop.close();
  }
  await ui.close();await uiCtx.close();
@@ -268,6 +272,16 @@ check('browser fixtures produce no uncaught page errors',!errors.length);await p
  check('while paused the quick button becomes Resume',!await hid('quickPause')&&/Resume/.test(await txt('quickPause')));
  await (await sh()).evaluate(r=>r.getElementById('quickPause').click());await bp.waitForTimeout(100);check('quick Resume sends resume',await bp.evaluate(()=>window.__sent.some(m=>m.action==='resume')));
  await bp.evaluate(()=>window.__listeners[0]({job:{newValue:{status:'completed',config:{limit:10}}}},'local'));check('quick button hides when nothing is running',await hid('quickPause'));
+ // panel redesign: shows only what applies, mode badge, countdown, skip
+ await bp.evaluate(()=>window.__listeners[0]({job:{newValue:null}},'local'));
+ check('idle panel shows the preview form, a PREVIEW badge and no task controls',!await hid('idle')&&await hid('controls')&&/PREVIEW/.test(await txt('chip')));
+ await bp.evaluate(()=>window.__listeners[0]({job:{newValue:{status:'running',done:2,message:'Reading Facebook',config:{dry:false,limit:10,action:'follow'},total:4,finished:[{label:'a',state:'done'}],queue:[{label:'itvnews',kind:'account'}],nextAt:Date.now()+12000}}},'local'));
+ check('running panel hides the preview form, shows Pause and Stop but not Resume or Skip, with a LIVE badge',await hid('idle')&&!await hid('controls')&&!await hid('pause')&&await hid('resume')&&await hid('skip')&&!await hid('stop')&&/LIVE/.test(await txt('chip')));
+ check('running panel shows target position and a countdown',/Target 2 of 4 · itvnews · next in 1[0-2]s/.test(await txt('now')));
+ await bp.evaluate(()=>window.__listeners[0]({job:{newValue:{status:'paused',done:2,message:'Group needs questions',config:{dry:false,limit:10,action:'join'},total:4,finished:[{label:'a',state:'done'}],queue:[{label:'grp1',kind:'account'},{label:'grp2',kind:'account'}]}}},'local'));
+ check('paused panel shows the alert, Resume, Skip, Stop and the error-report button',!await (async()=>(await sh()).evaluate(r=>r.getElementById('alert').hidden))()&&!await hid('resume')&&!await hid('skip')&&!await hid('reportRow'));
+ await bp.evaluate(()=>{window.__sent.length=0;});await (await sh()).evaluate(r=>r.getElementById('skip').click());await bp.waitForTimeout(100);
+ check('panel Skip asks the background to skip the current target',await bp.evaluate(()=>window.__sent.some(m=>m.action==='skipTarget')));
  await bp.close();await bctx.close();
 }
 console.log(JSON.stringify({passed,scope:'offline DOM and UI fixtures; not installed-extension or live-account verification'}));}finally{await browser.close();}})().catch(e=>{console.error(e);process.exit(1);});

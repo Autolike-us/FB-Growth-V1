@@ -195,7 +195,7 @@ async function paintPresetInfo(){const n=$('presetList').value,p=await getPreset
 $('presetList').addEventListener('change',paintPresetInfo);
 {const base=renderPresets;renderPresets=async function(keep){await base(keep);await paintPresetInfo();};}
 renderPresets($('presetList').value);
-$('presetUpdate').onclick=async()=>{const n=$('presetList').value;if(!n){notice('Choose a saved setup first.');return;}twice($('presetUpdate'),'Click again to overwrite “'+n+'” with the form',async()=>{const p=await getPresets();p[n]=settings();await chrome.storage.local.set({presets:p});await renderPresets(n);notice('Updated setup “'+n+'” with the current form.');});};
+$('presetUpdate').onclick=async()=>{const n=$('presetList').value;if(!n){notice('Choose a saved setup first.');return;}twice($('presetUpdate'),'Click again to overwrite “'+n+'”',async()=>{const p=await getPresets();p[n]=settings();await chrome.storage.local.set({presets:p});await renderPresets(n);notice('Updated setup “'+n+'” with the current form.');});};
 
 // ---- first-run checklist ----
 async function initFirstRun(){
