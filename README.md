@@ -1,4 +1,4 @@
-# Aurora • Facebook Studio 2.0.5
+# Aurora • Facebook Studio 2.0.6
 
 The Facebook preview UI now runs a task engine adapted from the current Instagram and TikTok studios, with a Facebook-specific URL planner, DOM discovery and confirmed actions. Existing popup, floating panel, dark/light theme, saved setups, history, debug reports and notifications are retained. No subscription or backend required.
 
@@ -39,7 +39,7 @@ Shares use Facebook's existing feed audience; Aurora does not change privacy set
 
 ## Verification and practical limits
 
-29 planning/worker tests and 56 offline Chromium DOM/UI checks passed during development. Fixtures cover every action, no-action preview, nested comment controls, duplicate/uncertain sends, warning detection, input validation, caps, pause/resume/restart and live confirmation. Chrome APIs and Facebook page URLs/layouts are simulated in these tests. They do **not** establish live Facebook compatibility or installed-extension verification. Facebook's changing React controls, dialogs and layouts may require selector updates; actions pause when confirmation cannot be established. Start with one intended target in Preview, then one intended live action.
+30 planning/worker tests and 60 offline Chromium DOM/UI checks passed during development. Fixtures cover every action, no-action preview, nested comment controls, duplicate/uncertain sends, warning detection, input validation, caps, pause/resume/restart and live confirmation. Chrome APIs and Facebook page URLs/layouts are simulated in these tests. They do **not** establish live Facebook compatibility or installed-extension verification. Facebook's changing React controls, dialogs and layouts may require selector updates; actions pause when confirmation cannot be established. Start with one intended target in Preview, then one intended live action.
 
 Facebook is the only host permission. `scripting` is added to reattach missing content scripts after extension reload; other existing permissions remain. No cookies/password extraction, remote analytics or license checks are used.
 
@@ -53,19 +53,19 @@ No build is needed to load the extension. `npm install` installs Playwright for 
 
 See `WORKFLOW_REVIEW.md` for the reference comparison and implementation map.
 
-## Version 2.0.5
-Aurora’s floating button and paused toolbar badge stay blue. Preview is enabled as a normal checkbox in both popup and studio: checked previews; unchecked enables live tasks. The header shows v2.0.5. The repository main branch may still be the old locked-preview 1.0.0 build until the draft PR is merged; install this release package to test automation.
+## Version 2.0.6
+Aurora’s floating button and paused toolbar badge stay blue. Preview is enabled as a normal checkbox in both popup and studio: checked previews; unchecked enables live tasks. The header shows v2.0.6. The repository main branch may still be the old locked-preview 1.0.0 build until the draft PR is merged; install this release package to test automation.
 
-## Permalink compatibility in 2.0.5
+## Permalink compatibility in 2.0.6
 Preserves photo/photo.php destinations instead of converting fbid links into text-post permalinks. Post detection supports unlabelled permalink containers using a unique post reaction/Comment/Share action row, and excludes comment-only containers even when they contain a post permalink. Diagnostic logs retain allowlisted post identity query parameters and include article/link counts. Regression fixtures passed; the exact live layout reported by the user has not been inspected.
 
-## Photo theater in 2.0.5
+## Photo theater in 2.0.6
 Supports the photo viewer rendered beside an empty role=main element, using one uniquely identifiable Like / Leave a comment / Share action row outside main. Nested comment Likes stay excluded. Offline selector verification against the user-provided HTML (scripts removed, network blocked, hidden server-rendered staging wrapper revealed to simulate hydration) found the photo Like control, not a comment control. No live action or real Facebook confirmation was tested. The uploaded HTML is private scratch input and is not included in source, tests or release files.
 
-## Reaction chooser in 2.0.5
+## Reaction chooser in 2.0.6
 Opens the native reaction palette with pointer and mouse events at the post button coordinates, then selects the requested accessible label (including labelled canvas/role-button layouts). The selector no longer depends on re-identifying the post container while the palette is open. It supports title, image and radio labels too; it never guesses an unlabeled icon by ordinal position. A chooser failure before the reaction click creates no action receipt. Legacy chooser-only receipts are cleared only when the same target and reaction have a matching logged no-click failure within the attempt window; uncertain sends remain blocked. Browser fixtures match the palette structure pasted by the user. Live Love confirmation still needs a one-target check.
 
-## Native reaction input in 2.0.5
+## Native reaction input in 2.0.6
 Facebook left the user's Love selection unreacted after a synthetic DOM click. Non-Like reactions now use Chrome debugger native mouse input: the active task tab, target post, configured reaction and labelled control at the pointer are validated, then one mouse press/release pair is sent and the debugger detaches. Existing plain Like tasks keep their established click path. Confirmation also recognizes a labelled selected-reaction icon when the outer button label stays Like; closing the palette alone is never considered success.
 
 This release adds the required `debugger` permission. Chrome does not allow it as an optional permission ([official permissions rules](https://developer.chrome.com/docs/extensions/reference/api/permissions)). Review the new access when loading/updating the extension. The API is used only for the active Facebook reaction task; no cookies, network bodies, console evaluations or account secrets are read by the debugger helper. Close DevTools on the task tab while the task runs; Chrome can show its debugging notification briefly.
@@ -73,3 +73,12 @@ This release adds the required `debugger` permission. Chrome does not allow it a
 For a paused uncertain reaction, check the post manually. If no reaction was applied, click **I checked: no reaction applied — allow retry**, then **Resume**. That clears only the current account/post/reaction's attempted receipt, keeps confirmed receipts and other targets, and leaves the task paused until Resume. It is your explicit manual review, not automatic retry of an unknown outcome.
 
 The debugger transport is tested with mocks and offline browser fixtures; it has not been verified as an installed extension against live Facebook. Test one intended Love reaction first.
+
+## Feed targets and confirmation in 2.0.6
+Profile discovery reads feed article/FeedUnit containers only, excluding profile headers, cover areas and comment rows. It does not scan every photo link in main. Create a new task after updating so previously collected header/cover links do not remain in the queue.
+
+Reaction summary counters (for example Care: 1 person) are not action controls. Confirmation checks the selected reaction on the retained target/scope when Facebook rerenders, and uses the same selected-control predicate when rebuilding the action row. Regression fixtures cover new counters and a replaced button/wrapper.
+
+If you visibly confirm that a paused reaction succeeded, click **I checked: reaction succeeded — count and advance**. This records that one attempted receipt as manually confirmed, increments the action/daily counters once and removes the current queue item without clicking again. Press Resume for the next item. A duplicate manual confirmation is rejected. For an old task containing unwanted cover/header targets, stop it and create a fresh feed task instead.
+
+User reports confirm native Care input succeeded; the new automatic confirmation and feed-only discovery still need live-layout validation.

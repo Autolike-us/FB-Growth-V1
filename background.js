@@ -139,6 +139,17 @@ async function nativeReactionClick(m,s){
   await dlog('info','Native '+m.reaction+' reaction click dispatched');return {ok:true};
  }finally{if(attached)try{await chrome.debugger.detach(target);}catch{}}
 }
+async function recordSuccessfulReaction(){
+ if(busy)throw Error('Wait for the current step to finish.');
+ const {job,receipts={}}=await chrome.storage.local.get(['job','receipts']);
+ if(job?.status!=='paused'||job.config.action!=='like'||job.queue[0]?.kind!=='engage')throw Error('Only the current paused reaction can be recorded.');
+ const [r]=await chrome.scripting.executeScript({target:{tabId:job.tabId},func:()=>globalThis.AuroraDOM?.actor()||'browser'});
+ const step=job.queue[0],key=(r?.result||'browser')+':like:'+AuroraSelectors.pageKey(step.url)+':'+job.config.reaction;
+ if(receipts[key]?.status!=='attempted')throw Error('No unconfirmed attempted reaction to record.');
+ receipts[key]={...receipts[key],status:'confirmed',review:'manual',time:Date.now()};await chrome.storage.local.set({receipts});
+ job.queue.shift();job.done=(job.done||0)+1;job.counts.like=(job.counts.like||0)+1;job.liked=job.counts.like;job.inFlight=false;await bumpDaily();
+ job.message='You confirmed the reaction succeeded. It was counted without clicking again. Press Resume for the next target.';await save(job);await log(job.message,step.url);return{ok:true,message:job.message};
+}
 async function allowReactionRetry(){
  if(busy)throw Error("The current step is still finishing. Wait for its result before reviewing a retry.");
  const {job,receipts={}}=await chrome.storage.local.get(['job','receipts']);
@@ -156,6 +167,7 @@ chrome.runtime.onMessage.addListener((m,s,respond)=>{
  (async()=>{
   if(m.action==='openStudio'){await chrome.tabs.create({url:chrome.runtime.getURL('dashboard.html')});return{ok:true};}
   if(m.action==='previewProfile')m={action:'start',config:{action:'like',reaction:'👍 Like',mode:'users',target:m.target,perUser:3,limit:3,delay:30,dailyCap:0,exclude:'',dry:true}};
+  if(m.action==='recordSuccessfulReaction')return recordSuccessfulReaction();
   if(m.action==='allowReactionRetry')return allowReactionRetry();
   if(m.action==='save'){await chrome.storage.local.set({config:m.config});return{ok:true};}
   if(m.action==='start'){

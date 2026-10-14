@@ -21,11 +21,11 @@ const D=globalThis.AuroraDOM={
   // Some permalinks expose comment rows as articles but no article for the post itself.
   // A post action row must contain reaction + Comment + Share, excluding Like/Reply rows.
   const rows=[];
-  for(const reaction of this.controls(main).filter(e=>/^(Like|Love|Care|Haha|Wow|Sad|Angry|(?:Remove |Change |You reacted with )(?:Like|Love|Care|Haha|Wow|Sad|Angry)(?: reaction)?)$/.test(this.text(e)))){
+  for(const reaction of this.controls(main).filter(e=>this.reactionControl(e))){
    if(reaction.closest('[aria-label*="Comment by" i],[data-testid*="comment" i]'))continue;
    for(let node=reaction.parentElement;node&&main.contains(node);node=node.parentElement){
     const controls=this.controls(node),labels=controls.map(e=>this.text(e));
-    const hearts=controls.filter(e=>/^(Like|Love|Care|Haha|Wow|Sad|Angry|(?:Remove |Change |You reacted with )(?:Like|Love|Care|Haha|Wow|Sad|Angry)(?: reaction)?)$/.test(this.text(e)));
+    const hearts=controls.filter(e=>this.reactionControl(e));
     if(hearts.length!==1)break;
     if(labels.some(t=>/^(Comment|Comment on this post|Leave a comment)$/.test(t))&&labels.some(t=>/^(Share|Share this post)$/.test(t))){rows.push(node);break;}
     if(node===main)break;
@@ -52,7 +52,8 @@ const D=globalThis.AuroraDOM={
  headerButton(...labels){const buttons=this.headerControls().filter(e=>labels.includes(this.text(e)));return buttons.length===1?buttons[0]:null;},
  author(root){return [...root.querySelectorAll('h2 a[href],h3 a[href],strong a[href],a[data-profile-link]')].filter(e=>this.visible(e)).map(e=>S.profileURL(e.href)).find(Boolean)||null;},
  actor(){return [...document.querySelectorAll('[role="banner"] a[href],nav a[href],[role="navigation"] a[href]')].filter(e=>this.visible(e)&&(/^(Your profile|Profile|Account)$/i.test(e.getAttribute('aria-label')||'')||e.querySelector('img[alt="Your profile"],img[alt="Your profile picture"]'))).map(e=>S.profileURL(e.href)).find(Boolean)||null;},
- reactionButton(root){const arr=this.ownControls(root).filter(e=>/^(Like|Love|Care|Haha|Wow|Sad|Angry|(?:Remove |Change |You reacted with )(?:Like|Love|Care|Haha|Wow|Sad|Angry)(?: reaction)?)$/.test(this.text(e))||this.selectedReaction(e));return arr.length===1?arr[0]:null;},
+ reactionControl(e){return !/^(?:Like|Love|Care|Haha|Wow|Sad|Angry):|\d+\s*(?:people|person|reaction)|see who reacted/i.test(this.text(e))&&(/^(Like|Love|Care|Haha|Wow|Sad|Angry|(?:Remove |Change |You reacted with )(?:Like|Love|Care|Haha|Wow|Sad|Angry)(?: reaction)?)$/.test(this.text(e))||!!this.selectedReaction(e));},
+ reactionButton(root){const arr=this.ownControls(root).filter(e=>this.reactionControl(e));return arr.length===1?arr[0]:null;},
  reactionName(e){
   const names=['Like','Love','Care','Haha','Wow','Sad','Angry'];
   const values=[e.getAttribute('alt'),e.getAttribute('aria-label'),e.getAttribute('title'),e.getAttribute('data-reaction'),e.getAttribute('data-reaction-type'),e.textContent,...[...e.querySelectorAll('[aria-label],[title],img[alt]')].flatMap(n=>[n.getAttribute('aria-label'),n.getAttribute('title'),n.getAttribute('alt')])];
@@ -75,7 +76,7 @@ const D=globalThis.AuroraDOM={
   target.dispatchEvent(new PointerEvent('click',{bubbles:true,cancelable:true,composed:true,view:window,clientX,clientY,button:0,buttons:0,detail:1,pointerType:'mouse',pointerId:1,isPrimary:true}));
  },
  selectedReaction(button){
-  if(!button)return null;
+  if(!button||/^(?:Like|Love|Care|Haha|Wow|Sad|Angry):|\d+\s*(?:people|person|reaction)|see who reacted/i.test(this.text(button)))return null;
   const names=['Like','Love','Care','Haha','Wow','Sad','Angry'];
   const label=this.text(button);
   for(const name of names)if(new RegExp('^(?:Remove |Change |You reacted with )?'+name+'(?: reaction)?$','i').test(label)&&(name!=='Like'||button.getAttribute('aria-pressed')==='true'||/^Remove |^Change |^You reacted with /i.test(label)))return name;
