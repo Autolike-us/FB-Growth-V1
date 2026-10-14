@@ -1,6 +1,6 @@
 {
   "name": "aurora-facebook-studio",
-  "version": "2.0.11",
+  "version": "2.0.12",
   "private": true,
   "scripts": {
     "test": "node tests/planning.test.cjs && node tests/worker.test.cjs",

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Aurora \u2022 Facebook Studio",
-  "version": "2.0.11",
+  "version": "2.0.12",
   "description": "Personal Facebook post discovery, reactions, follows, comments, friend requests, group joins and shares with preview and local history.",
   "permissions": [
     "storage",

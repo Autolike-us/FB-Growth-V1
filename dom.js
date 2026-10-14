@@ -179,6 +179,11 @@ const D=globalThis.AuroraDOM={
   }
   return palettes.length===1?palettes[0]:null;
  },
+ pointByReaction(e,name){
+  if(!this.visible(e))return null;const r=e.getBoundingClientRect(),sel='button,[role="button"],[role="radio"],[role="menuitem"],[data-interactable*="|click|"]';
+  for(const [fx,fy] of [[.5,.5],[.5,.3],[.5,.7],[.3,.5],[.7,.5]]){const x=r.left+r.width*fx,y=r.top+r.height*fy;if(x<0||y<0||x>=innerWidth||y>=innerHeight)continue;const hit=document.elementFromPoint(x,y),ctl=hit?.closest(sel);if(hit&&ctl&&this.reactionName(ctl)===name&&!hit.closest('[aria-label*="Comment by" i]'))return{x,y,hit};}
+  return null;
+ },
  reactionChoice(name,target){
   const selector='button,[role="button"],[role="radio"],[role="menuitem"],[data-interactable*="|click|"]';
   const near=e=>{const r=e.getBoundingClientRect(),t=target.getBoundingClientRect();return r.width>0&&r.height>0&&Math.abs(r.top-t.top)<220&&r.right>t.left-100&&r.left<t.right+650;};

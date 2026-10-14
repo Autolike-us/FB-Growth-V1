@@ -91,7 +91,10 @@ async function tick(){
   job.retries=0;
   if(r.wait){job.message=r.wait;job.nextAt=Date.now()+3000;await save(job);await schedule(job);return;}
   let more=[];
-  if(step.kind==='feed'){if(r.key)(job.seen??=[]).push(r.key);step.count=(step.count||0)+(r.key?1:0);if(r.end||step.count>=job.config.perUser)job.queue.shift();}
+  if(step.kind==='feed'){
+   // perUser counts posts actually reacted to/commented on; already-handled posts are skipped without using up the quota (bounded by a generous look-at cap).
+   if(r.key)(job.seen??=[]).push(r.key);if(r.key)step.examined=(step.examined||0)+1;if(r.performed||r.preview)step.count=(step.count||0)+1;
+   if(r.end||(step.count||0)>=job.config.perUser||(step.examined||0)>=job.config.perUser*10+20)job.queue.shift();}
   else{job.queue.shift();more=AuroraEngine.expand(job,step,r);job.queue.unshift(...more);}
   let gap=quick();
   if(step.kind==='posts')job.message=`Discovered ${more.length} ${step.kind==='posts'?'posts':'profiles'}. ${r.note||''}`;
