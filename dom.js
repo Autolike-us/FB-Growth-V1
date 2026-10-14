@@ -73,10 +73,12 @@ const D=globalThis.AuroraDOM={
   const blocked='[role="dialog"],[role="alertdialog"],[data-pagelet*="Cover" i],[data-pagelet*="ProfileHeader" i],[aria-label*="Comment by" i],[aria-label*="Reply by" i],[data-testid*="comment" i]';
   const commentish=t=>/^(Comment|Comments|Leave a comment|Comment on this post|Write a comment)/i.test(t),shareish=t=>/^(Share|Share this post|Send this to friends)/i.test(t);
   const out=[];
-  for(const like of this.controls(document.body).filter(e=>this.reactionControl(e)&&!e.closest(blocked))){
+  // A reacted post exposes both "Remove Like" and "Change Like reaction"; only the first is the primary control.
+  const primary=e=>this.reactionControl(e)&&!/^Change /i.test(this.text(e));
+  for(const like of this.controls(document.body).filter(e=>primary(e)&&!e.closest(blocked))){
    for(let n=like.parentElement,depth=0;n&&n!==document.body&&depth<8;n=n.parentElement,depth++){
     const own=this.ownControls(n);
-    if(own.filter(e=>this.reactionControl(e)).length!==1)break;
+    if(own.filter(primary).length!==1)break;
     const labels=own.map(e=>this.text(e));
     if(labels.some(commentish)||labels.some(shareish)||this.field(n)){
      let box=n;for(let p=n.parentElement,i=0;p&&p!==document.body&&i<12;p=p.parentElement,i++){if(p.matches('[role="feed"],[role="main"],main'))break;box=p;if(p.matches('[role="article"]'))break;}
@@ -146,6 +148,7 @@ const D=globalThis.AuroraDOM={
   target.dispatchEvent(new PointerEvent('pointerenter',{...common,pointerType:'mouse',pointerId:1,isPrimary:true}));
   target.dispatchEvent(new MouseEvent('mouseover',common));target.dispatchEvent(new MouseEvent('mouseenter',common));
  },
+ unhover(element){const r=element.getBoundingClientRect(),common={bubbles:true,view:window,clientX:r.left+r.width/2,clientY:r.top+r.height/2,relatedTarget:document.body};for(const t of [element,document.elementFromPoint(common.clientX,common.clientY)].filter(Boolean)){t.dispatchEvent(new PointerEvent('pointerout',{...common,pointerType:'mouse',pointerId:1,isPrimary:true}));t.dispatchEvent(new PointerEvent('pointerleave',{...common,pointerType:'mouse',pointerId:1,isPrimary:true}));t.dispatchEvent(new MouseEvent('mouseout',common));t.dispatchEvent(new MouseEvent('mouseleave',common));}},
  press(element){
   const r=element.getBoundingClientRect(),clientX=r.left+r.width/2,clientY=r.top+r.height/2;
   const hit=document.elementFromPoint(clientX,clientY);const target=hit&&element.contains(hit)?hit:element;

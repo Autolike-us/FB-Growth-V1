@@ -31,8 +31,9 @@ async function likePost(root,key,s,c,id){
  if(!reachable)throw Error('The post reaction control is covered or outside the visible post. No click sent. Scroll the post or close the overlay, then resume.');
  let pick=target,method='Like control';
  if(c.reaction!=='Like'){
-  await active(id);D.hover(target);
-  let choice=await until(()=>D.reactionChoice(c.reaction,target),id,5000);
+  let choice=null;
+  // The palette sometimes does not open on the first hover; re-hover up to twice before giving up (nothing is clicked yet).
+  for(let attempt=0;attempt<3&&!choice;attempt++){await active(id);if(attempt){D.unhover(target);await wait(700);D.reveal(target);await wait(300);}D.hover(target);choice=await until(()=>D.reactionChoice(c.reaction,target),id,attempt?3500:5000);}
   if(!choice){
    const palette=D.reactionPalette(target);if(palette){
     // Hovering native icons can expose a tooltip even when there is no accessible label.
