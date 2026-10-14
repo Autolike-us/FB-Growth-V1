@@ -185,6 +185,17 @@ check('browser fixtures produce no uncaught page errors',!errors.length);await p
  check('Reset erases the target, comment, exclude list and numbers back to factory defaults',await ui.inputValue('#target')===''&&await ui.inputValue('#comment')===''&&await ui.inputValue('#exclude')===''&&await ui.inputValue('#perUser')==='3'&&await ui.inputValue('#delay')==='30'&&await ui.inputValue('#action')==='like');
  check('Reset puts Preview only back on',await ui.isChecked('#dry')&&/PREVIEW MODE/.test(await ui.textContent('#modeBar'))&&/Start preview/.test(await ui.textContent('#start')));
  check('Reset forgets the remembered draft and last-started config so nothing returns on reopen',await ui.evaluate(async()=>{const o=await chrome.storage.local.get(['draft','config']);return !o.draft&&!o.config;}));
+ {
+  // Popup layout: scroll the page and make sure the pinned right column never lets Saved setups overlap Live session.
+  const pop=await browser.newContext({viewport:{width:760,height:600}}),pp=await pop.newPage();pp.on('pageerror',e=>{throw e;});
+  await pp.setContent(read('popup.html').replace(/<script src="[^"]*"><\/script>/g,'').replace(/<link[^>]*stylesheet[^>]*>/,''));
+  await pp.evaluate(()=>{const store={};window.chrome={storage:{local:{get:async k=>{const o={};[].concat(k||[]).forEach(x=>{if(x in store)o[x]=store[x];});return o;},set:async o=>Object.assign(store,o),remove:async k=>{[].concat(k).forEach(x=>delete store[x]);}},onChanged:{addListener(){}}},runtime:{getManifest:()=>({version:'9.9.9'}),sendMessage:async()=>({ok:true}),getURL:x=>x},permissions:{contains:async()=>true}};});
+  await pp.addStyleTag({content:read('style.css').replace(/@import[^;]*;/g,'')});await pp.addScriptTag({content:read('report.js')});await pp.addScriptTag({content:read('dashboard.js')});await pp.waitForTimeout(500);
+  let overlap=false,seen=0;
+  for(const y of [0,150,300,600,900,1500]){await pp.evaluate(y=>window.scrollTo(0,y),y);await pp.waitForTimeout(80);const r=await pp.evaluate(()=>{const a=document.querySelector('article.live').getBoundingClientRect(),b=document.querySelector('article.setups').getBoundingClientRect();return{liveBottom:a.bottom,setupsTop:b.top,setupsBottom:b.bottom,liveTop:a.top};});seen++;if(r.setupsTop<r.liveBottom-1)overlap=true;}
+  check('popup: Saved setups never overlaps the Live session card while scrolling',!overlap&&seen===6);
+  await pp.close();await pop.close();
+ }
  await ui.close();await uiCtx.close();
 }
 console.log(JSON.stringify({passed,scope:'offline DOM and UI fixtures; not installed-extension or live-account verification'}));}finally{await browser.close();}})().catch(e=>{console.error(e);process.exit(1);});
