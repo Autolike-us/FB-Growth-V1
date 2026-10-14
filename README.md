@@ -117,4 +117,4 @@ Unfollow now handles Facebook's "Follow settings" dialog: it picks the Unfollow 
 - **Aurora panel on Facebook:** matches the studio (follows light/dark), shows a PREVIEW or LIVE badge, and shows only the controls that apply — the preview form when idle; Pause and Stop while running; Resume, **Skip this target**, Stop and Copy error report when paused — with "Target 2 of 5 · name · next in 24s" and a progress bar.
 
 ## Version 2.0.26: no sticky Start bar
-The full studio's Start/Save buttons are ordinary form content again (nothing sticks to the window). In the popup the original compact Start/Save bar is back; the one-line summary is plain text just above it.
+Nothing is pinned to the window any more: in both the full studio and the popup, Start/Save are ordinary form content, with the one-line summary just above them.

@@ -201,7 +201,7 @@ check('browser fixtures produce no uncaught page errors',!errors.length);await p
   const bars=await pp.evaluate(()=>{const inner=[...document.querySelectorAll('body *')].filter(e=>/auto|scroll/.test(getComputedStyle(e).overflowY)&&e.scrollHeight>e.clientHeight+2).map(e=>e.tagName+'.'+e.className);return{inner,sideways:document.documentElement.scrollWidth>document.documentElement.clientWidth+1||document.body.scrollWidth>document.body.clientWidth+1};});
   check('popup: no inner scrollbars (only the page scrolls) and no horizontal scrollbar',bars.inner.length===0&&!bars.sideways);
   const pb=await pp.evaluate(()=>{const g=s=>getComputedStyle(document.querySelector(s)).position,r=document.querySelector('#task .actions').getBoundingClientRect();return{startbar:g('#task .startbar'),actions:g('#task .actions'),summary:g('#startSummary'),h:Math.round(r.height)};});
-  check('popup: only the compact Start/Save button bar is pinned (the summary line is ordinary text above it)',pb.startbar==='static'&&pb.actions==='fixed'&&pb.summary==='static'&&pb.h<80);
+  check('popup: nothing is pinned — Start/Save are ordinary form content (no fixed or sticky elements)',await pp.evaluate(()=>[...document.querySelectorAll('body *')].every(e=>!['fixed','sticky'].includes(getComputedStyle(e).position))));
   await pp.close();await pop.close();
  }
  await ui.close();await uiCtx.close();
