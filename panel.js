@@ -12,17 +12,17 @@
     [hidden]{display:none}pre{white-space:pre-wrap;font:12px/1.5 ui-monospace,Consolas,monospace;background:#f4f6f7;border:1px solid #d9dde0;border-radius:10px;padding:10px;margin:10px 0 0;color:#121218}h2{margin:0;font-size:22px}p{line-height:1.5;margin:12px 0}small{color:#685d76}
     input{width:100%;padding:11px;border:1px solid #d8cae8;border-radius:10px;margin:8px 0 12px;background:white;color:#1c1e21}
     .row{display:flex;gap:6px;flex-wrap:wrap;margin-top:12px}#status{font-weight:600}#message{overflow-wrap:anywhere}label{display:block;margin-top:15px}
-  </style><section hidden><h2>✦ Aurora <small>1.0.0</small></h2><div id="alert" role="alert">🔔 Paused — needs you. Check the message, then press Resume.</div>
-    <p id="status">Ready</p><p id="message" role="status" aria-live="polite">Visits a page and reports what it would do. Nothing is ever clicked.</p>
+  </style><section hidden><h2>✦ Aurora <small>2.0.0</small></h2><div id="alert" role="alert">🔔 Paused — needs you. Check the message, then press Resume.</div>
+    <p id="status">Ready</p><p id="message" role="status" aria-live="polite">Preview a profile without sending actions. Open the full studio for live tasks.</p>
     <label for="target">Page or profile</label><input id="target" placeholder="@username">
     <button id="preview" class="primary">Preview profile</button>
     <div class="row"><button id="pause">Pause</button><button id="resume">Resume</button><button id="stop">Stop</button></div>
-    <p><small>Visits up to 3 steps. Allow 30 seconds between steps.</small></p><div class="row"><button id="studio">Open full studio</button><button id="check">Check page</button></div><div class="row"><button id="copyReport">Copy error report</button></div><pre id="report" hidden></pre>
+    <p><small>Checks up to 3 rendered posts. Preview never sends engagement actions.</small></p><div class="row"><button id="studio">Open full studio</button><button id="check">Check page</button></div><div class="row"><button id="copyReport">Copy error report</button></div><pre id="report" hidden></pre>
   </section><button id="toggle" aria-expanded="false">✦ Aurora</button>`;
   document.documentElement.append(host);
   const $ = id => shadow.getElementById(id);
   const profile = location.pathname.match(/^\/([\w.]+)\/?$/)?.[1];
-  if (profile && !['explore','reels','direct','accounts'].includes(profile)) $('target').value=profile;
+  if (profile && !['groups','reels','reel','watch','hashtag','marketplace','search','login','friends'].includes(profile)) $('target').value=profile;
   $('toggle').onclick=()=>{const section=shadow.querySelector('section');section.hidden=!section.hidden;$('toggle').setAttribute('aria-expanded',String(!section.hidden));};
   async function send(action, extra={}) {
     try {const result=await chrome.runtime.sendMessage({action,...extra});if(!result?.ok)throw Error(result?.error||'No response from Aurora.');if(result.message)$('message').textContent=result.message;}
