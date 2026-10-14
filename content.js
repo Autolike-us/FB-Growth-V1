@@ -129,7 +129,8 @@ async function sharePost(root,key,c,id){
  const composerSubmit=m=>items(m).find(e=>/^(Share now|Post|Share)$/i.test(label(e)));
  return perform(key,id,async()=>{
   D.reveal(shares[0]);await wait(500);shares[0].click();
-  const menu=await until(()=>menus().find(m=>immediate(m)||toFeed(m)||composerSubmit(m))||menus()[0],id,6000);
+  // The dialog opens first and fills in a moment later: wait for a usable option, not just for the dialog.
+  const menu=await until(()=>menus().find(m=>immediate(m)||toFeed(m)||composerSubmit(m)),id,10000)||menus()[0];
   if(!menu)throw Object.assign(Error('Share menu did not open. Nothing was shared.'),{noClick:true});
   if(/Share to a group|Send in Messenger/.test(menu.querySelector('h1,h2,[role="heading"]')?.textContent||'')&&!immediate(menu)&&!toFeed(menu))throw Object.assign(Error('Unexpected share destination. Review it manually.'),{noClick:true});
   let pick=immediate(menu),second=false;
