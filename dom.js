@@ -8,12 +8,16 @@ const D=globalThis.AuroraDOM={
   // Try the visible portion too: a tall labelled wrapper can have its centre outside the dialog.
   const left=Math.max(0,r.left),right=Math.min(innerWidth,r.right),top=Math.max(0,r.top),bottom=Math.min(innerHeight,r.bottom);
   if(right<=left||bottom<=top)return null;
-  for(const [fx,fy] of [[.5,.5],[.25,.25],[.75,.25],[.25,.75],[.75,.75]]){const x=left+(right-left)*fx,y=top+(bottom-top)*fy,hit=document.elementFromPoint(x,y);if(hit&&e.contains(hit))return{x,y,hit};}
+  for(const [fx,fy] of [[.5,.5],[.25,.25],[.75,.25],[.25,.75],[.75,.75],[.5,.15],[.5,.35],[.5,.65],[.5,.85],[.15,.5],[.85,.5]]){const x=left+(right-left)*fx,y=top+(bottom-top)*fy,hit=document.elementFromPoint(x,y);if(hit&&e.contains(hit))return{x,y,hit};}
   return null;
  },
  reveal(e){e?.scrollIntoView({block:'center',inline:'nearest',behavior:'instant'});},
  // Facebook's sticky headers, chat docks and lazy layout shifts can cover the control at one alignment; try several before giving up.
- async clear(e,pause=200){for(const block of ['center','start','end','center']){if(!e?.isConnected)return null;e.scrollIntoView({block,inline:'nearest',behavior:'instant'});if(block==='start')scrollBy({top:-140,behavior:'instant'});if(block==='end')scrollBy({top:140,behavior:'instant'});await new Promise(r=>setTimeout(r,pause));const p=this.point(e);if(p)return p;}return null;},
+ scroller(e){for(let p=e?.parentElement;p;p=p.parentElement){const s=getComputedStyle(p);if(/auto|scroll/.test(s.overflowY)&&p.scrollHeight>p.clientHeight+4)return p;}return null;},
+ async clear(e,pause=200){const wait=()=>new Promise(r=>setTimeout(r,pause));for(const block of ['center','start','end','center']){if(!e?.isConnected)return null;e.scrollIntoView({block,inline:'nearest',behavior:'instant'});if(block==='start')scrollBy({top:-140,behavior:'instant'});if(block==='end')scrollBy({top:140,behavior:'instant'});await wait();const p=this.point(e);if(p)return p;}
+  // Posts opened in a dialog scroll inside their own container, where a sticky comment bar or header can hide the action row: nudge that container.
+  const box=this.scroller(e);if(box)for(const dy of [120,-240,320,-480,160]){if(!e?.isConnected)return null;box.scrollBy({top:dy,behavior:'instant'});await wait();const p=this.point(e);if(p)return p;}
+  return null;},
  coveredBy(e){if(!e?.isConnected)return 'detached';const r=e.getBoundingClientRect(),h=document.elementFromPoint(Math.min(innerWidth-1,Math.max(0,r.left+r.width/2)),Math.min(innerHeight-1,Math.max(0,r.top+r.height/2)));if(!h)return 'offscreen';const d=h.closest('[role="dialog"],[role="banner"],[role="complementary"]');return (d?d.getAttribute('role')+' ':'')+h.tagName.toLowerCase()+(h.getAttribute('aria-label')?' "'+h.getAttribute('aria-label')+'"':'')+(d?.innerText?' ('+d.innerText.slice(0,60).replace(/\s+/g,' ')+')':'');},
  scrollFeed(root){
   const feed=root.querySelector('[role="feed"]')||root,anchor=feed.querySelector('[role="article"],[data-pagelet*="FeedUnit"],a[href*="/reel/"]')||feed;
