@@ -11,16 +11,17 @@
     section{width:min(340px,calc(100vw - 40px));padding:20px;background:#ffffff;border:1px solid #dadde1;border-radius:24px;box-shadow:0 12px 50px #22103233;margin-bottom:10px}
     [hidden]{display:none}pre{white-space:pre-wrap;font:12px/1.5 ui-monospace,Consolas,monospace;background:#f4f6f7;border:1px solid #d9dde0;border-radius:10px;padding:10px;margin:10px 0 0;color:#121218}h2{margin:0;font-size:22px}p{line-height:1.5;margin:12px 0}small{color:#685d76}
     input{width:100%;padding:11px;border:1px solid #d8cae8;border-radius:10px;margin:8px 0 12px;background:white;color:#1c1e21}
-    .row{display:flex;gap:6px;flex-wrap:wrap;margin-top:12px}#status{font-weight:600}#message{overflow-wrap:anywhere}label{display:block;margin-top:15px}
-  </style><section hidden><h2>✦ Aurora <small>2.0.7</small></h2><div id="alert" role="alert">🔔 Paused — needs you. Check the message, then press Resume.</div>
+    .bar{display:flex;gap:8px;justify-content:flex-end;align-items:center}#quickPause{border-radius:999px;padding:10px 14px;font-weight:650;box-shadow:0 6px 18px rgba(0,0,0,.18)}.row{display:flex;gap:6px;flex-wrap:wrap;margin-top:12px}#status{font-weight:600}#message{overflow-wrap:anywhere}label{display:block;margin-top:15px}
+  </style><section hidden><h2>✦ Aurora <small id="ver"></small></h2><div id="alert" role="alert">🔔 Paused — needs you. Check the message, then press Resume.</div>
     <p id="status">Ready</p><p id="message" role="status" aria-live="polite">Preview a profile without sending actions. Open the full studio for live tasks.</p>
     <label for="target">Page or profile</label><input id="target" placeholder="@username">
     <button id="preview" class="primary">Preview profile</button>
     <div class="row"><button id="pause">Pause</button><button id="resume">Resume</button><button id="stop">Stop</button></div>
     <p><small>Checks up to 3 rendered posts. Preview never sends engagement actions.</small></p><div class="row"><button id="studio">Open full studio</button><button id="check">Check page</button></div><div class="row"><button id="copyReport">Copy error report</button></div><pre id="report" hidden></pre>
-  </section><button id="toggle" aria-expanded="false">✦ Aurora</button>`;
+  </section><div class="bar"><button id="quickPause" hidden>⏸ Pause</button><button id="toggle" aria-expanded="false">✦ Aurora</button></div>`;
   document.documentElement.append(host);
   const $ = id => shadow.getElementById(id);
+  try{$('ver').textContent=chrome.runtime.getManifest().version;}catch{}
   const profile = location.pathname.match(/^\/([\w.]+)\/?$/)?.[1];
   if (profile && !['groups','reels','reel','watch','hashtag','marketplace','search','login','friends'].includes(profile)) $('target').value=profile;
   $('toggle').onclick=()=>{const section=shadow.querySelector('section');section.hidden=!section.hidden;$('toggle').setAttribute('aria-expanded',String(!section.hidden));};
@@ -39,7 +40,9 @@
     if(job?.message)$('message').textContent=job.message;
     const paused=job?.status==='paused',section=shadow.querySelector('section');
     $('alert').classList.toggle('on',paused);$('toggle').classList.toggle('alert',paused);
-    $('toggle').textContent=paused?'🔔 Aurora needs you':job?.status==='running'?'✦ Aurora · running':'✦ Aurora';
+    $('toggle').textContent=paused?'🔔 Aurora needs you':job?.status==='running'?'✦ Aurora · '+(job.done||0)+'/'+(job.config?.limit||'?'):'✦ Aurora';
+    // One-click Pause (while running) / Resume (while paused) next to the bubble, no need to open the panel.
+    const qp=$('quickPause');qp.hidden=!(job?.status==='running'||paused);qp.textContent=paused?'▶ Resume':'⏸ Pause';qp.onclick=()=>send(paused?'resume':'pause');
     if(paused&&!wasPaused){section.hidden=false;$('toggle').setAttribute('aria-expanded','true');}
     const running=job?.status==='running';if(running&&!wasRunning){section.hidden=true;$('toggle').setAttribute('aria-expanded','false');}wasRunning=running;
     wasPaused=paused;

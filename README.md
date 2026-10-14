@@ -102,3 +102,12 @@ Unfollow now handles Facebook's "Follow settings" dialog: it picks the Unfollow 
 - **Join:** if Facebook shows a membership-questions or rules dialog, Aurora closes it without answering and moves to the next group (it is logged as skipped, and a later run can still try that group).
 - **Share:** the Share menu is read as a menu (not only buttons). Aurora picks "Share now", or "Share to Feed" followed by the composer's Share now/Post button; if neither exists it reports the options it saw. A post that cannot be handled is skipped; three in a row pause the task with the reason.
 - **Studio:** fields that do not apply to the chosen action are hidden (follow/unfollow/friend/join hide "posts per target" and the source picker; only React shows the reaction list; only Comment shows the comment box). A banner always says PREVIEW MODE (nothing is sent) or LIVE MODE, the start button reads "Start preview" or "Start live task", and finished preview runs say that nothing was sent.
+
+## Version 2.0.24: studio navigation
+- **Start summary + target check:** a line above Start restates the task (mode, action, target count, posts each, pace, time estimate), and the target box shows how many targets are recognised and which are not valid. Start is blocked with a clear message while one is invalid.
+- **Collapsible sections:** "Pace & limits" and "Advanced" fold away (their current values show in the caption) and remember whether you opened them.
+- **Live session card:** shows "Target 2 of 5 · name · post 1/3 · next in 24s", a per-target list (✓ done, ↷ skipped, ▶ current, ○ upcoming) and, when paused, **Skip this target & continue**.
+- **Sidebar badges:** a dot on Studio while running (red when paused), a count on Activity history, and a dot on Debug log for new errors.
+- **Activity history:** filter chips (All, Done, Skipped, Problems), search, and status icons.
+- **Saved setups:** a one-line summary of the selected setup and an "Update this setup with the current form" button.
+- **First-run checklist** (dismissible), **Ctrl+Enter** to start, a sticky Start bar in the full studio, and on Facebook the bubble shows progress with a one-click Pause/Resume.

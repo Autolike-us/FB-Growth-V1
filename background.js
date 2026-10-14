@@ -51,6 +51,8 @@ async function bumpDaily(){await chrome.storage.local.set({daily:{day:today(),co
 async function focusTab(job){try{await chrome.tabs.update(job.tabId,{active:true});const t=await chrome.tabs.get(job.tabId);await chrome.windows.update(t.windowId,{focused:true,drawAttention:true});}catch{}}
 // Live mode is remembered in the studio form until the task is done; then the next form opens in Preview again.
 async function draftToPreview(){try{const {draft}=await chrome.storage.local.get('draft');if(draft&&draft.dry===false)await chrome.storage.local.set({draft:{...draft,dry:true}});}catch{}}
+// Per-target progress for the studio's Live session card.
+function closeStep(job,step,r){(job.finished??=[]).push({label:step.label||short(step.url),state:step.kind==='feed'?((step.count||0)>0?'done':'skipped'):(r&&(r.performed||r.preview)?'done':'skipped'),n:step.count||0});if(job.finished.length>200)job.finished.shift();}
 async function finish(job){
  job.status='completed';if(!job.config.dry)await draftToPreview();job.message=`Session complete: ${job.done||0} ${job.config.dry?'previewed':'actions confirmed'}, ${job.skipped||0} skipped.`;
  await save(job);await log(job.message);await dlog('info','Task finished: '+job.message);await chrome.alarms.clear('step');await notify('Aurora finished ✓',job.message);
@@ -100,8 +102,8 @@ async function tick(){
    // A post that could not be handled is skipped; three in a row means something systematic, so pause with the reason instead of grinding on.
    if(r.failed){job.failStreak=(job.failStreak||0)+1;if(job.failStreak>=3)throw Error('Three posts in a row could not be handled. Last reason: '+String(r.message||'').replace(/^Skipped: /,''));}else if(r.key)job.failStreak=0;
    if(r.key)(job.seen??=[]).push(r.key);if(r.key)step.examined=(step.examined||0)+1;if(r.performed||r.preview)step.count=(step.count||0)+1;
-   if(r.end||(step.count||0)>=job.config.perUser||(step.examined||0)>=job.config.perUser*10+20)job.queue.shift();}
-  else{job.queue.shift();more=AuroraEngine.expand(job,step,r);job.queue.unshift(...more);}
+   if(r.end||(step.count||0)>=job.config.perUser||(step.examined||0)>=job.config.perUser*10+20){job.queue.shift();closeStep(job,step,r);}}
+  else{job.queue.shift();if(step.kind!=='posts')closeStep(job,step,r);more=AuroraEngine.expand(job,step,r);job.queue.unshift(...more);}
   let gap=quick();
   if(step.kind==='posts')job.message=`Discovered ${more.length} ${step.kind==='posts'?'posts':'profiles'}. ${r.note||''}`;
   else{if(r.performed||r.preview){gap=pause(job);job.done=(job.done||0)+1;if(r.performed){job.counts[job.config.action]++;await bumpDaily();}else job.previewed++;}else if(step.kind!=='feed'||r.key)job.skipped++;job.liked=job.counts.like;job.message=r.message;}
@@ -150,6 +152,18 @@ async function nativeReactionClick(m,s){
   await dlog('info','Native '+m.reaction+' reaction click dispatched');return {ok:true};
  }finally{if(attached)try{await chrome.debugger.detach(target);}catch{}}
 }
+// Paused on one stubborn page/group/post? Drop just that target (it is never retried) and carry on with the rest.
+async function skipTarget(){
+ if(busy)throw Error('A step is still finishing. Wait for its result before skipping.');
+ const {job}=await chrome.storage.local.get('job');if(job?.status!=='paused')throw Error('Only a paused task can skip its current target.');
+ const step=job.queue.shift();if(!step)throw Error('There is no target left to skip.');
+ (job.finished??=[]).push({label:step.label||short(step.url),state:'skipped',n:step.count||0,note:'skipped by you'});
+ job.skipped=(job.skipped||0)+1;job.inFlight=false;job.retries=0;job.navigation=null;job.failStreak=0;
+ await dlog('info','You skipped '+short(step.url));
+ if(!job.queue.length){await save(job);await finish(job);return{ok:true,message:job.message};}
+ job.message='Skipped '+(step.label||'that target')+'. Continuing with the next one.';await save(job);await log(job.message);
+ return resumeTask();
+}
 async function recordSuccessfulReaction(){
  if(busy)throw Error('Wait for the current step to finish.');
  const {job,receipts={}}=await chrome.storage.local.get(['job','receipts']);
@@ -178,6 +192,7 @@ chrome.runtime.onMessage.addListener((m,s,respond)=>{
  (async()=>{
   if(m.action==='openStudio'){await chrome.tabs.create({url:chrome.runtime.getURL('dashboard.html')});return{ok:true};}
   if(m.action==='previewProfile')m={action:'start',config:{action:'like',reaction:'👍 Like',mode:'users',target:m.target,perUser:3,limit:3,delay:30,dailyCap:0,exclude:'',dry:true}};
+  if(m.action==='skipTarget')return skipTarget();
   if(m.action==='recordSuccessfulReaction')return recordSuccessfulReaction();
   if(m.action==='allowReactionRetry')return allowReactionRetry();
   if(m.action==='save'){await chrome.storage.local.set({config:m.config});return{ok:true};}
@@ -185,7 +200,7 @@ chrome.runtime.onMessage.addListener((m,s,respond)=>{
    if(busy)throw Error('A step is finishing. Try again shortly.');const old=(await chrome.storage.local.get('job')).job;if(['running','paused'].includes(old?.status))throw Error('Stop the current task first.');
    const config=AuroraEngine.config(m.config),queue=AuroraEngine.initial(config);if(!config.dry&&config.action==='like'&&config.reaction!=='Like'&&!await chrome.permissions.contains({permissions:['debugger']}))throw Error('Allow native mouse input in the studio to run this reaction.');if(!queue.length)throw Error('All targets are excluded.');
    await chrome.storage.local.set({config:m.config});const tab=await taskTab(queue[0].url);
-   const job={version:4,id:crypto.randomUUID(),config,queue,tabId:tab.id,status:'running',counts:{like:0,follow:0,unfollow:0,comment:0,friend:0,join:0,share:0},done:0,liked:0,previewed:0,skipped:0,seen:[],seenUsers:[],nextAt:Date.now()+2000,message:`${config.dry?'Preview':'Live'} ${config.action} task started. Waiting for Facebook.`};
+   const job={version:4,id:crypto.randomUUID(),config,queue,total:queue.length,finished:[],tabId:tab.id,status:'running',counts:{like:0,follow:0,unfollow:0,comment:0,friend:0,join:0,share:0},done:0,liked:0,previewed:0,skipped:0,seen:[],seenUsers:[],nextAt:Date.now()+2000,message:`${config.dry?'Preview':'Live'} ${config.action} task started. Waiting for Facebook.`};
    await save(job);await log(job.message);await dlog('info',job.message,{action:config.action,reaction:config.reaction,mode:config.mode,target:String(config.target||'').slice(0,200),limit:config.limit,perUser:config.perUser,scanLimit:config.scanLimit,delay:config.delay,dailyCap:config.dailyCap,preview:config.dry,steps:queue.length});await schedule(job);return{ok:true,message:job.message};
   }
 
