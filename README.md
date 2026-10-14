@@ -91,3 +91,6 @@ Debug page checks include discoverable-feed counts and structural control geomet
 
 ## Version 2.0.8: in-feed liking and commenting
 For page, group and hashtag targets, Like and Comment now work down the feed in place instead of collecting post links and opening each one. Aurora takes the first post not handled yet, reacts (or comments) if you have not already, waits your configured delay, then moves to the next and scrolls for more. Posts without a reaction bar (suggestions, reel rails) are ignored. Share, follow, friend and join keep their previous flow. Direct post/reel links still open the post.
+
+## Version 2.0.13: comment and share in the feed
+Comment and Share now use the same in-feed walk as reactions. For each post Aurora opens the Comment control (Facebook labels it "Leave a comment"), types your text one character at a time with natural pauses, sends it, closes any pop-up Facebook opened, and moves to the next post. Share opens the post's Share menu and chooses Share now. Reactions: the palette is waited out and a stubborn post is skipped rather than pausing the task. Follow, unfollow, friend and join still visit each listed page/group; their header button now uses the first match when Facebook shows it twice.

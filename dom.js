@@ -118,7 +118,8 @@ const D=globalThis.AuroraDOM={
  },
  header(){const main=this.scope();if(!main)return null;return main.querySelector('[data-pagelet="ProfileTiles"],[data-pagelet="ProfileHeader"],[data-pagelet="PageHeader"],[data-pagelet="GroupHeader"]')||main;},
  headerControls(){return this.controls(this.header()).filter(e=>!e.closest('[role="article"]'));},
- headerButton(...labels){const buttons=this.headerControls().filter(e=>labels.includes(this.text(e)));return buttons.length===1?buttons[0]:null;},
+ // A page can show the same Follow/Message button twice (header and sticky bar); the first one in the document is the real header.
+ headerButton(...labels){const buttons=this.headerControls().filter(e=>labels.includes(this.text(e)));return buttons[0]||null;},
  author(root){return [...root.querySelectorAll('h2 a[href],h3 a[href],strong a[href],a[data-profile-link]')].filter(e=>this.visible(e)).map(e=>S.profileURL(e.href)).find(Boolean)||null;},
  actor(){return [...document.querySelectorAll('[role="banner"] a[href],nav a[href],[role="navigation"] a[href]')].filter(e=>this.visible(e)&&(/^(Your profile|Profile|Account)$/i.test(e.getAttribute('aria-label')||'')||e.querySelector('img[alt="Your profile"],img[alt="Your profile picture"]'))).map(e=>S.profileURL(e.href)).find(Boolean)||null;},
  reactionControl(e){return !/^(?:Like|Love|Care|Haha|Wow|Sad|Angry):|\d+\s*(?:people|person|reaction)|see who reacted/i.test(this.text(e))&&(/^(Like|Love|Care|Haha|Wow|Sad|Angry|(?:Remove |Change |You reacted with )(?:Like|Love|Care|Haha|Wow|Sad|Angry)(?: reaction)?)$/.test(this.text(e))||!!this.selectedReaction(e));},
@@ -195,7 +196,19 @@ const D=globalThis.AuroraDOM={
  },
  reacted(button){if(!button)return null;if(this.selectedReaction(button))return true;if(button.getAttribute('aria-pressed')==='true'||/^Remove |^(Love|Care|Haha|Wow|Sad|Angry)$/.test(this.text(button)))return true;if(button.getAttribute('aria-pressed')==='false'||this.text(button)==='Like')return false;return null;},
  commentRows(root){return [...root.querySelectorAll('[role="article"]')].filter(e=>e!==root&&this.visible(e));},
- field(root){const arr=[...root.querySelectorAll('textarea,[contenteditable="true"][role="textbox"],div[contenteditable="true"][aria-label]')].filter(e=>this.visible(e)&&/comment/i.test(e.getAttribute('aria-label')||e.getAttribute('placeholder')||''));return arr.length===1?arr[0]:null;},
+ field(root){const arr=[...root.querySelectorAll('textarea,[contenteditable="true"][role="textbox"],div[contenteditable="true"][aria-label]')].filter(e=>this.visible(e)&&/comment/i.test(e.getAttribute('aria-label')||e.getAttribute('placeholder')||'')&&!/repl/i.test(e.getAttribute('aria-label')||e.getAttribute('placeholder')||''));return arr.length===1||(this.lenient&&arr.length>1)?arr[0]:null;},
+ // Types one character at a time with human-like, uneven pauses (longer at spaces and punctuation, an occasional hesitation).
+ async typeHuman(f,text,tick){
+  const wait=ms=>new Promise(r=>setTimeout(r,ms));f.focus();
+  for(const ch of text){
+   await tick?.();if(document.activeElement!==f&&!f.contains(document.activeElement))f.focus();
+   if('value'in f){const proto=f.tagName==='TEXTAREA'?HTMLTextAreaElement.prototype:HTMLInputElement.prototype;Object.getOwnPropertyDescriptor(proto,'value').set.call(f,f.value+ch);f.dispatchEvent(new InputEvent('input',{bubbles:true,inputType:'insertText',data:ch}));}
+   else if(!document.execCommand('insertText',false,ch)){f.textContent+=ch;f.dispatchEvent(new InputEvent('input',{bubbles:true,inputType:'insertText',data:ch}));}
+   await wait(45+Math.random()*95+(/[\s.,!?]/.test(ch)?60+Math.random()*140:0)+(Math.random()<.04?300+Math.random()*400:0));
+  }
+ },
+ // The send arrow sits next to the editor; look outward from it a few levels for a Comment/Post/Send control.
+ submitFor(field){for(let p=field.parentElement,i=0;p&&p!==document.body&&i<7;p=p.parentElement,i++){const b=this.controls(p).find(e=>/^(Comment|Post|Send|Reply|Submit)$/i.test(this.text(e))&&!e.contains(field));if(b)return b;}return null;},
  fieldText(f){return 'value'in f?f.value:f.innerText;},
  type(f,text){f.focus();if('value'in f){const proto=f.tagName==='TEXTAREA'?HTMLTextAreaElement.prototype:HTMLInputElement.prototype;Object.getOwnPropertyDescriptor(proto,'value').set.call(f,text);f.dispatchEvent(new InputEvent('input',{bubbles:true,inputType:'insertText',data:text}));}else{document.execCommand('selectAll',false);if(!document.execCommand('insertText',false,text)){f.textContent=text;f.dispatchEvent(new InputEvent('input',{bubbles:true,inputType:'insertText',data:text}));}}},
  warning(){if(/\/(?:login|checkpoint|recover)(?:[/?]|$)/.test(location.pathname)||document.querySelector('input[type="password"]'))return 'Sign in or complete verification on Facebook, then resume.';const lang=document.documentElement.lang;if(lang&&!/^en(?:-|$)/i.test(lang))return 'Use Facebook in English so action labels can be verified.';const zones=[...document.querySelectorAll('[role="alert"],[role="alertdialog"],[role="dialog"],h1,h2')].filter(e=>this.visible(e));for(const e of zones){const text=e.innerText||e.textContent||'';if(/temporarily blocked|you.re temporarily blocked|we limit how often|you can.t use this feature|account restricted|try again later|confirm your identity|security check|enter the code|captcha|verify you.re human/i.test(text))return 'Facebook requested a restriction or verification. Check the task tab before resuming.';}return null;}
