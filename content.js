@@ -26,8 +26,7 @@ if(c.action==='like'){
   if(address&&S.pageKey(address)===S.pageKey(s.url)){delete receipts[key];await chrome.storage.local.set({receipts});blockedPrior=null;T('Removed legacy chooser-only receipt; log proves no reaction click');}
  }
  if(blockedPrior)return{message:'Skipped: Aurora already attempted this reaction. Check Facebook; no duplicate sent.'};
- await active(id);D.reveal(target);await wait(150);
- if(!D.point(target))throw Error('The post reaction control is covered or outside the visible post. No click sent. Scroll the post or close the overlay, then resume.');
+ await active(id);if(!await D.clear(target))throw Error('The post reaction control is covered or outside the visible post ('+D.coveredBy(target)+'). No click sent. Scroll the post or close the overlay, then resume.');
  let pick=target,method='Like control';
  if(c.reaction!=='Like'){
   await active(id);D.hover(target);

@@ -12,6 +12,9 @@ const D=globalThis.AuroraDOM={
   return null;
  },
  reveal(e){e?.scrollIntoView({block:'center',inline:'nearest',behavior:'instant'});},
+ // Facebook's sticky headers, chat docks and lazy layout shifts can cover the control at one alignment; try several before giving up.
+ async clear(e,pause=200){for(const block of ['center','start','end','center']){if(!e?.isConnected)return null;e.scrollIntoView({block,inline:'nearest',behavior:'instant'});if(block==='start')scrollBy({top:-140,behavior:'instant'});if(block==='end')scrollBy({top:140,behavior:'instant'});await new Promise(r=>setTimeout(r,pause));const p=this.point(e);if(p)return p;}return null;},
+ coveredBy(e){if(!e?.isConnected)return 'detached';const r=e.getBoundingClientRect(),h=document.elementFromPoint(Math.min(innerWidth-1,Math.max(0,r.left+r.width/2)),Math.min(innerHeight-1,Math.max(0,r.top+r.height/2)));if(!h)return 'offscreen';const d=h.closest('[role="dialog"],[role="banner"],[role="complementary"]');return (d?d.getAttribute('role')+' ':'')+h.tagName.toLowerCase()+(h.getAttribute('aria-label')?' "'+h.getAttribute('aria-label')+'"':'')+(d?.innerText?' ('+d.innerText.slice(0,60).replace(/\s+/g,' ')+')':'');},
  scrollFeed(root){
   const feed=root.querySelector('[role="feed"]')||root,anchor=feed.querySelector('[role="article"],[data-pagelet*="FeedUnit"],a[href*="/reel/"]')||feed;
   for(let p=anchor;p;p=p.parentElement){if(/auto|scroll/.test(getComputedStyle(p).overflowY)&&p.scrollHeight>p.clientHeight+1){p.scrollBy({top:Math.max(300,p.clientHeight*.8),behavior:'instant'});return;}}
