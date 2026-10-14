@@ -6,7 +6,7 @@ const RETRYABLE=/did not render this page|No posts appeared|Post content did not
 // Pauses that need a person (not a one-click Resume).
 const NEEDS_HUMAN=/captcha|verify|verification|restricted|Sign in|Daily cap|interrupted|restarted|unknown/i;
 const HISTORY_MAX=5000,RECEIPT_MAX_AGE=90*864e5,LOG_MAX=1500;
-const BADGE={running:['ON','#1fae7c'],paused:['!','#f43f5e'],completed:['✓','#7b5cf0']};
+const BADGE={running:['ON','#1fae7c'],paused:['!','#1877f2'],completed:['✓','#7b5cf0']};
 function badge(job){const b=BADGE[job?.status];chrome.action.setBadgeText({text:b?b[0]:''});if(b)chrome.action.setBadgeBackgroundColor({color:b[1]});}
 const save=job=>{badge(job);return chrome.storage.local.set({job});};
 chrome.storage.local.get('job').then(({job})=>badge(job));
