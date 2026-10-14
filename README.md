@@ -1,4 +1,4 @@
-# Aurora • Facebook Studio 2.0.1
+# Aurora • Facebook Studio 2.0.2
 
 The Facebook preview UI now runs a task engine adapted from the current Instagram and TikTok studios, with a Facebook-specific URL planner, DOM discovery and confirmed actions. Existing popup, floating panel, dark/light theme, saved setups, history, debug reports and notifications are retained. No subscription or backend required.
 
@@ -39,7 +39,7 @@ Shares use Facebook's existing feed audience; Aurora does not change privacy set
 
 ## Verification and practical limits
 
-22 planning/worker tests and 37 offline Chromium DOM/UI checks passed during development. Fixtures cover every action, no-action preview, nested comment controls, duplicate/uncertain sends, warning detection, input validation, caps, pause/resume/restart and live confirmation. Chrome APIs and Facebook page URLs/layouts are simulated in these tests. They do **not** establish live Facebook compatibility or installed-extension verification. Facebook's changing React controls, dialogs and layouts may require selector updates; actions pause when confirmation cannot be established. Start with one intended target in Preview, then one intended live action.
+23 planning/worker tests and 44 offline Chromium DOM/UI checks passed during development. Fixtures cover every action, no-action preview, nested comment controls, duplicate/uncertain sends, warning detection, input validation, caps, pause/resume/restart and live confirmation. Chrome APIs and Facebook page URLs/layouts are simulated in these tests. They do **not** establish live Facebook compatibility or installed-extension verification. Facebook's changing React controls, dialogs and layouts may require selector updates; actions pause when confirmation cannot be established. Start with one intended target in Preview, then one intended live action.
 
 Facebook is the only host permission. `scripting` is added to reattach missing content scripts after extension reload; other existing permissions remain. No cookies/password extraction, remote analytics or license checks are used.
 
@@ -53,5 +53,8 @@ No build is needed to load the extension. `npm install` installs Playwright for 
 
 See `WORKFLOW_REVIEW.md` for the reference comparison and implementation map.
 
-## Version 2.0.1
-Aurora’s floating button and paused toolbar badge stay blue. Preview is enabled as a normal checkbox in both popup and studio: checked previews; unchecked enables live tasks. The header shows v2.0.1. The repository main branch may still be the old locked-preview 1.0.0 build until the draft PR is merged; install this release package to test automation.
+## Version 2.0.2
+Aurora’s floating button and paused toolbar badge stay blue. Preview is enabled as a normal checkbox in both popup and studio: checked previews; unchecked enables live tasks. The header shows v2.0.2. The repository main branch may still be the old locked-preview 1.0.0 build until the draft PR is merged; install this release package to test automation.
+
+## Permalink compatibility in 2.0.2
+Preserves photo/photo.php destinations instead of converting fbid links into text-post permalinks. Post detection supports unlabelled permalink containers using a unique post reaction/Comment/Share action row, and excludes comment-only containers even when they contain a post permalink. Diagnostic logs retain allowlisted post identity query parameters and include article/link counts. Regression fixtures passed; the exact live layout reported by the user has not been inspected.

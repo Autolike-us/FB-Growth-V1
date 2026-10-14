@@ -5,10 +5,46 @@ const D=globalThis.AuroraDOM={
  text(e){return String(e?.getAttribute('aria-label')||e?.innerText||e?.textContent||'').trim().replace(/\s+/g,' ');},
  controls(root){return [...(root?.querySelectorAll('button,[role="button"]')||[])].filter(e=>this.visible(e)&&!e.disabled&&e.getAttribute('aria-disabled')!=='true');},
  button(root,...labels){const matches=this.controls(root).filter(e=>labels.includes(this.text(e)));return matches.length===1?matches[0]:null;},
- scope(){return document.querySelector('[role="main"],main');},
+ scope(){return [...document.querySelectorAll('[role="main"],main')].find(e=>this.visible(e))||null;},
  dialogs(){return [...document.querySelectorAll('[role="dialog"],[role="alertdialog"]')].filter(e=>this.visible(e));},
- ownControls(root){return this.controls(root).filter(e=>{const a=e.closest('[role="article"]');return !a||a===root||!root.contains(a);});},
- postRoot(url){const key=S.pageKey(url),main=this.scope();if(!main)return null;const all=[...document.querySelectorAll('[role="article"]')].filter(e=>this.visible(e)&&!e.parentElement?.closest('[role="article"]'));const matched=all.filter(a=>[...a.querySelectorAll('a[href]')].some(e=>S.postURL(e.href)&&S.pageKey(e.href)===key));if(matched.length===1)return matched[0];const dialogs=this.dialogs().filter(d=>[...d.querySelectorAll('a[href]')].some(e=>S.postURL(e.href)&&S.pageKey(e.href)===key));if(dialogs.length===1)return dialogs[0];if(S.postURL(location.href)&&S.pageKey(location.href)===key){const inside=all.filter(a=>main.contains(a));if(inside.length===1)return inside[0];if(inside.length===0&&/\/(reel|watch|videos)/.test(location.pathname)&&this.ownControls(main).some(e=>/^(Like|Love|Care|Haha|Wow|Sad|Angry)$/.test(this.text(e))))return main;}return null;},
+ ownControls(root){return this.controls(root).filter(e=>{if(e.closest('[aria-label*="Comment by" i],[data-testid*="comment" i]'))return false;const a=e.closest('[role="article"]');return !a||a===root||!root.contains(a);});},
+ postRoot(url){
+  const key=S.pageKey(url),main=this.scope();if(!main||!S.postURL(url))return null;
+  const linksMatch=e=>[...e.querySelectorAll('a[href]')].some(a=>S.postURL(a.href)&&S.pageKey(a.href)===key);
+  const all=[...document.querySelectorAll('[role="article"]')].filter(e=>this.visible(e)&&!e.parentElement?.closest('[role="article"]'));
+  const matched=all.filter(a=>linksMatch(a)&&!a.matches('[aria-label*="Comment by" i],[data-testid*="comment" i]')&&this.reactionButton(a)&&this.ownControls(a).some(e=>/^(Share|Share this post)$/.test(this.text(e))));if(matched.length===1)return matched[0];
+  const dialogs=this.dialogs().filter(linksMatch);if(dialogs.length===1)return dialogs[0];
+  if(!S.postURL(location.href)||S.pageKey(location.href)!==key)return null;
+  const inside=all.filter(a=>main.contains(a));
+  // Some permalinks expose comment rows as articles but no article for the post itself.
+  // A post action row must contain reaction + Comment + Share, excluding Like/Reply rows.
+  const rows=[];
+  for(const reaction of this.controls(main).filter(e=>/^(Like|Love|Care|Haha|Wow|Sad|Angry|Remove (?:Like|Love|Care|Haha|Wow|Sad|Angry))$/.test(this.text(e)))){
+   if(reaction.closest('[aria-label*="Comment by" i],[data-testid*="comment" i]'))continue;
+   for(let node=reaction.parentElement;node&&main.contains(node);node=node.parentElement){
+    const controls=this.controls(node),labels=controls.map(e=>this.text(e));
+    const hearts=controls.filter(e=>/^(Like|Love|Care|Haha|Wow|Sad|Angry|Remove (?:Like|Love|Care|Haha|Wow|Sad|Angry))$/.test(this.text(e)));
+    if(hearts.length!==1)break;
+    if(labels.some(t=>/^(Comment|Comment on this post|Leave a comment)$/.test(t))&&labels.some(t=>/^(Share|Share this post)$/.test(t))){rows.push(node);break;}
+    if(node===main)break;
+   }
+  }
+  const unique=[...new Set(rows)];
+  if(unique.length===1){
+   let root=unique[0];
+   for(let parent=root.parentElement;parent&&main.contains(parent);parent=parent.parentElement){
+    const otherRows=unique.filter(r=>parent.contains(r));if(otherRows.length!==1)break;
+    root=parent;
+    if(linksMatch(root)||this.author(root)||root.querySelector('[data-ad-preview="message"],[data-ad-comet-preview="message"]'))return root;
+    if(parent===main)break;
+   }
+   return root;
+  }
+  // Keep the existing single-article layout, but never mistake a comment-only article for a post.
+  if(inside.length===1&&this.reactionButton(inside[0])&&this.ownControls(inside[0]).some(e=>/^(Share|Share this post)$/.test(this.text(e)))&&(this.field(inside[0])||this.ownControls(inside[0]).some(e=>/^(Comment|Comment on this post|Leave a comment)$/.test(this.text(e))))&&!inside[0].matches('[aria-label*="Comment by" i]'))return inside[0];
+  if(inside.length===0&&/\/(reel|watch|videos)/.test(location.pathname)&&this.reactionButton(main))return main;
+  return null;
+ },
  header(){const main=this.scope();if(!main)return null;return main.querySelector('[data-pagelet="ProfileTiles"],[data-pagelet="ProfileHeader"],[data-pagelet="PageHeader"],[data-pagelet="GroupHeader"]')||main;},
  headerControls(){return this.controls(this.header()).filter(e=>!e.closest('[role="article"]'));},
  headerButton(...labels){const buttons=this.headerControls().filter(e=>labels.includes(this.text(e)));return buttons.length===1?buttons[0]:null;},

@@ -18,7 +18,7 @@ function dlog(level,msg,data){
  logChain=logChain.then(async()=>{const {debugLog=[]}=await chrome.storage.local.get('debugLog');debugLog.push(e);await chrome.storage.local.set({debugLog:debugLog.slice(-LOG_MAX)});}).catch(()=>{});
  return logChain;
 }
-const short=u=>String(u||'').split('?')[0];
+const short=u=>{try{const x=new URL(u),q=new URLSearchParams();for(const k of ['story_fbid','fbid','id','v'])if(x.searchParams.has(k))q.set(k,x.searchParams.get(k));return x.origin+x.pathname+(q.size?'?'+q:'');}catch{return String(u||'').split('?')[0];}};
 const ctx=r=>[r?.trace?.length?'page trace: '+r.trace.join(' | '):'',r?.stack?'page error stack:\n'+r.stack:'',r?.diag||''].filter(Boolean).join('\n');
 globalThis.addEventListener?.('unhandledrejection',e=>dlog('error','Unhandled error in background',String(e.reason?.stack||e.reason).split('\n').slice(0,5).join('\n')));
 
