@@ -57,3 +57,5 @@ renderPresets();
 $('bannerRetryReaction').onclick=()=>send('allowReactionRetry');
 
 $('bannerRecordReaction').onclick=()=>send('recordSuccessfulReaction');
+
+try{document.querySelectorAll('header .badge').forEach(b=>{b.textContent='✦ v'+chrome.runtime.getManifest().version+' · Preview + live actions';});}catch{}

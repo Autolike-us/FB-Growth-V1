@@ -106,9 +106,9 @@ async function feedRun(s,c,id,seen){
   const rows=D.feedRows();if(rows.length)sawRows=true;
   const o=rows.find(r=>{const k=D.rowKey(r);return !seen.has(k)&&!feedIgnored.has(k);});
   if(!o){
-   D.scrollFeed(document.body);await wait(1500);
+   D.advance(rows);await wait(2200);
    idle=D.feedRows().some(r=>{const k=D.rowKey(r);return !seen.has(k)&&!feedIgnored.has(k);})?0:idle+1;
-   if(idle>=4){if(!sawRows)throw Error('No posts appeared. '+D.probe());return{end:true,message:'End of feed: no more new posts here.'};}
+   if(idle>=5){if(!sawRows)throw Error('No posts appeared. '+D.probe());return{end:true,message:'End of feed: no more new posts here.'};}
    continue;
   }
   idle=0;
