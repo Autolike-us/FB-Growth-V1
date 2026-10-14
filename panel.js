@@ -12,7 +12,7 @@
     [hidden]{display:none}pre{white-space:pre-wrap;font:12px/1.5 ui-monospace,Consolas,monospace;background:#f4f6f7;border:1px solid #d9dde0;border-radius:10px;padding:10px;margin:10px 0 0;color:#121218}h2{margin:0;font-size:22px}p{line-height:1.5;margin:12px 0}small{color:#685d76}
     input{width:100%;padding:11px;border:1px solid #d8cae8;border-radius:10px;margin:8px 0 12px;background:white;color:#1c1e21}
     .row{display:flex;gap:6px;flex-wrap:wrap;margin-top:12px}#status{font-weight:600}#message{overflow-wrap:anywhere}label{display:block;margin-top:15px}
-  </style><section hidden><h2>✦ Aurora <small>2.0.6</small></h2><div id="alert" role="alert">🔔 Paused — needs you. Check the message, then press Resume.</div>
+  </style><section hidden><h2>✦ Aurora <small>2.0.7</small></h2><div id="alert" role="alert">🔔 Paused — needs you. Check the message, then press Resume.</div>
     <p id="status">Ready</p><p id="message" role="status" aria-live="polite">Preview a profile without sending actions. Open the full studio for live tasks.</p>
     <label for="target">Page or profile</label><input id="target" placeholder="@username">
     <button id="preview" class="primary">Preview profile</button>
