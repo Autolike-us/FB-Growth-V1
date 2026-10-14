@@ -45,16 +45,57 @@ async function likePost(root,key,s,c,id){
  }
  const confirmationScope=root();
  T('reaction choice',c.reaction,method);
- return perform(key,id,async()=>{const point=D.point(pick);if(!point)throw Object.assign(Error('The reaction choice is covered or outside the visible post. No click sent.'),{noClick:true});if(c.reaction==='Like'){pick.click();return;}const result=await chrome.runtime.sendMessage({action:'nativeReactionClick',jobId:id,url:s.url,reaction:c.reaction,x:point.x,y:point.y});if(!result?.ok)throw Object.assign(Error(result?.error||'Native reaction input returned no result.'),{noClick:result?.noClick===true});},()=>{const scope=root()||(confirmationScope?.isConnected?confirmationScope:null);const b=(target.isConnected&&D.selectedReaction(target)?target:null)||D.reactionButton(scope);const selected=D.selectedReaction(b);if(selected)T('selected reaction',selected);return selected===c.reaction;},'Reacted '+c.reaction+' to post.');
+ return perform(key,id,async()=>{let point=null;if(c.reaction!=='Like')await wait(350);
+  // The palette animates open and Facebook draws tooltips over it: wait for the icon to settle instead of failing on the first look.
+  for(let t=0;t<14&&!point;t++){await active(id);if(c.reaction!=='Like'){const ch=D.reactionChoice(c.reaction,target);if(ch)pick=ch.element;}point=D.point(pick)||(c.reaction!=='Like'?D.pointByReaction(pick,c.reaction):null);if(!point){if(t===6&&c.reaction!=='Like')D.hover(target);await wait(250);}}
+  if(!point)throw Object.assign(Error('The reaction choice is covered or outside the visible post. No click sent.'),{noClick:true});if(c.reaction==='Like'){pick.click();return;}const result=await chrome.runtime.sendMessage({action:'nativeReactionClick',jobId:id,url:s.url,reaction:c.reaction,x:point.x,y:point.y});if(!result?.ok)throw Object.assign(Error(result?.error||'Native reaction input returned no result.'),{noClick:result?.noClick===true});},()=>{const scope=root()||(confirmationScope?.isConnected?confirmationScope:null);const b=(target.isConnected&&D.selectedReaction(target)?target:null)||D.reactionButton(scope);const selected=D.selectedReaction(b);if(selected)T('selected reaction',selected);return selected===c.reaction;},'Reacted '+c.reaction+' to post.');
 }
-async function commentPost(root,key,c,id){let field=D.field(root());if(!field){const target=D.ownControls(root()).filter(e=>/^(Comment|Comment on this post)$/.test(D.text(e)));if(c.dry&&target.length===1)return{preview:true,message:'Preview: comment control available; editor not opened. Nothing typed or posted.'};if(target.length===1){await active(id);target[0].click();field=await until(()=>D.field(root()),id,5000);}}if(!field)return{message:'Skipped: a unique comment editor is unavailable.'};if(c.dry)return{preview:true,message:'Preview: comment on target post. Nothing typed or posted.'};if(D.fieldText(field).trim())throw Error('Comment box already contains a draft. Clear it manually before resuming.');const {receipts={}}=await chrome.storage.local.get('receipts');if(receipts[key])return{message:'Skipped: comment previously attempted. No duplicate sent.'};const want=c.comment.replace(/\s*[\r\n]+\s*/g,' ').trim();const hasText=()=>D.commentRows(root()).some(r=>r.innerText?.includes(want));if(hasText())return{message:'Skipped: matching comment already visible.'};await active(id);D.type(field,want);if(D.fieldText(field).trim()!==want)throw Error('Comment did not type correctly. Nothing submitted.');return perform(key,id,async()=>{const submit=D.button(field.parentElement,'Send','Post','Comment')||D.button(root(),'Send','Post');if(submit){await active(id);submit.click();}else{await active(id);field.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',code:'Enter',keyCode:13,which:13,bubbles:true}));field.dispatchEvent(new KeyboardEvent('keyup',{key:'Enter',code:'Enter',keyCode:13,which:13,bubbles:true}));}},()=>hasText()&&(!D.field(root())||!D.fieldText(D.field(root())).trim()),'Posted your comment.');}
+async function commentPost(root,key,c,id){
+ let field=D.field(root());
+ const opener=()=>D.ownControls(root()).filter(e=>/^(Comment|Comments|Comment on this post|Leave a comment|Write a comment)/i.test(D.text(e)))[0]||null;
+ if(!field){
+  const target=opener();
+  if(c.dry&&target)return{preview:true,message:'Preview: comment control available; editor not opened. Nothing typed or posted.'};
+  if(target){await active(id);D.reveal(target);await wait(400);target.click();field=await until(()=>D.field(root()),id,6000);}
+ }
+ if(!field)return{message:'Skipped: a unique comment editor is unavailable.'};
+ if(c.dry)return{preview:true,message:'Preview: comment on target post. Nothing typed or posted.'};
+ if(D.fieldText(field).trim())throw Error('Comment box already contains a draft. Clear it manually before resuming.');
+ const {receipts={}}=await chrome.storage.local.get('receipts');if(receipts[key])return{message:'Skipped: comment previously attempted. No duplicate sent.'};
+ const want=c.comment.replace(/\s*[\r\n]+\s*/g,' ').trim(),norm=t=>String(t||'').replace(/\s+/g,' ');
+ const hasText=()=>D.commentRows(root()).some(r=>r.innerText?.includes(want))||norm(root()?.innerText).includes(want)&&!D.fieldText(D.field(root())||{value:''}).trim();
+ if(D.commentRows(root()).some(r=>r.innerText?.includes(want)))return{message:'Skipped: matching comment already visible.'};
+ await active(id);await wait(900+Math.random()*1300);
+ T('Typing comment');await D.typeHuman(field,want,()=>active(id));
+ if(D.fieldText(field).trim()!==want)throw Error('Comment did not type correctly. Nothing submitted.');
+ await wait(600+Math.random()*900);
+ return perform(key,id,async()=>{const submit=D.submitFor(field);await active(id);if(submit)submit.click();else{for(const type of ['keydown','keypress','keyup'])field.dispatchEvent(new KeyboardEvent(type,{key:'Enter',code:'Enter',keyCode:13,which:13,bubbles:true,cancelable:true}));}},()=>hasText()&&(!D.field(root())||!D.fieldText(D.field(root())).trim()),'Posted your comment.');
+}
+async function sharePost(root,key,c,id){
+ const shares=D.ownControls(root()).filter(e=>/^(Share|Share this post|Share reel|Share, send this to friends|Send this to friends)/i.test(D.text(e)));
+ if(!shares.length)return{message:'Skipped: no Share control on this post.'};
+ if(c.dry)return{preview:true,message:'Preview: share target post to your feed using Facebook’s current audience. No change made.'};
+ const menus=()=>[...D.dialogs(),...document.querySelectorAll('[role="menu"]')].filter(e=>D.visible(e)&&/share/i.test(e.innerText||''));
+ const feedButton=m=>D.controls(m).find(e=>/^(Share now|Share to Feed|Share to your feed)/i.test(D.text(e)))||D.button(m,'Share');
+ return perform(key,id,async()=>{
+  D.reveal(shares[0]);await wait(500);shares[0].click();
+  const menu=await until(()=>menus()[0],id,6000);if(!menu)throw Error('Share dialog unavailable. Nothing automatically submitted.');
+  if(/Share to a group|Send in Messenger/.test(menu.querySelector('h1,h2,[role="heading"]')?.textContent||''))throw Error('Unexpected share destination. Review it manually.');
+  const send=feedButton(menu);if(!send)throw Error('Feed share submit button unavailable. Review Facebook manually.');
+  await wait(500+Math.random()*700);await active(id);send.click();
+ },()=>[...document.querySelectorAll('[role="alert"],[role="status"]')].some(e=>D.visible(e)&&/post (?:was )?shared|shared to your|shared successfully|shared/i.test(e.innerText))||!menus().length,'Shared post to your feed.');
+}
 async function engage(s,c,id){const root=()=>D.postRoot(s.url);if(!await until(root,id,12000))throw Error('Post content did not render as a unique target. No action sent.');const author=D.author(root());if(author&&AuroraEngine.excluded(author,'',c))return{message:'Skipped: excluded post author.'};const who=D.actor()||'browser',key=who+':'+c.action+':'+S.pageKey(s.url)+(c.action==='like'?':'+c.reaction:'');
 if(c.action==='like')return likePost(root,key,s,c,id);
 if(c.action==='comment')return commentPost(root,key,c,id);
-if(c.action==='share'){const shares=D.ownControls(root()).filter(e=>/^(Share|Share this post)$/.test(D.text(e)));if(shares.length!==1)throw Error('Cannot identify a unique target Share control.');if(c.dry)return{preview:true,message:'Preview: share target post to your feed using Facebook’s current audience. No change made.'};return perform(key,id,async()=>{shares[0].click();const dialog=await until(()=>D.dialogs().find(d=>/share/i.test(d.innerText)),id,5000);if(!dialog)throw Error('Share dialog unavailable. Nothing automatically submitted.');if(/Share to a group|Send in Messenger/.test(dialog.querySelector('h1,h2,[role="heading"]')?.textContent||''))throw Error('Unexpected share destination. Review it manually.');const send=D.button(dialog,'Share now','Share now (Friends)','Share Now','Share');if(!send)throw Error('Feed share submit button unavailable. Review Facebook manually.');await active(id);send.click();},()=>[...document.querySelectorAll('[role="alert"],[role="status"]')].some(e=>D.visible(e)&&/post (?:was )?shared|shared to your|shared successfully/i.test(e.innerText)),'Shared post to your feed.');}throw Error('Unsupported post action.');}
+if(c.action==='share')return sharePost(root,key,c,id);throw Error('Unsupported post action.');}
 // Feed mode: work down the page the way a person does. Take the first post not handled yet, react/comment in place, then scroll on.
 const feedIgnored=new Set();
-async function closeDialogs(id){for(let n=0;n<3;n++){const d=D.dialogs().find(x=>D.button(x,'Close'));if(!d)return;await active(id);D.button(d,'Close').click();await wait(600);}}
+async function closeDialogs(id,s){
+ for(let n=0;n<3;n++){const d=D.dialogs().find(x=>D.button(x,'Close'));if(!d)break;await active(id);D.button(d,'Close').click();await wait(600);}
+ // A post dialog can change the address bar; step back so the feed (and its scroll position) is still there for the next post.
+ if(s&&S.pageKey(location.href)!==S.pageKey(s.url)){history.back();await wait(1200);}
+}
 async function feed(s,c,id,seen){D.lenient=true;try{return await feedRun(s,c,id,seen);}finally{D.lenient=false;}}
 async function feedRun(s,c,id,seen){
  await closeDialogs(id);
@@ -65,9 +106,9 @@ async function feedRun(s,c,id,seen){
   const rows=D.feedRows();if(rows.length)sawRows=true;
   const o=rows.find(r=>{const k=D.rowKey(r);return !seen.has(k)&&!feedIgnored.has(k);});
   if(!o){
-   D.scrollFeed(document.body);await wait(1500);
+   D.advance(rows);await wait(2200);
    idle=D.feedRows().some(r=>{const k=D.rowKey(r);return !seen.has(k)&&!feedIgnored.has(k);})?0:idle+1;
-   if(idle>=4){if(!sawRows)throw Error('No posts appeared. '+D.probe());return{end:true,message:'End of feed: no more new posts here.'};}
+   if(idle>=5){if(!sawRows)throw Error('No posts appeared. '+D.probe());return{end:true,message:'End of feed: no more new posts here.'};}
    continue;
   }
   idle=0;
@@ -82,8 +123,14 @@ async function feedRun(s,c,id,seen){
   let r;
   try{
    if(c.action==='like')r=await likePost(()=>find()?.row,who+':like:'+pk+':'+c.reaction,s,c,id);
+   else if(c.action==='share')r=await sharePost(()=>find()?.row,who+':share:'+pk,c,id);
    else r=await commentPost(()=>D.dialogs().find(d=>D.field(d))||find()?.box,who+':comment:'+pk,c,id);
-  }finally{if(c.action==='comment')await closeDialogs(id);}
+  }catch(e){
+   // Errors that guarantee no click was sent (or an unconfirmed one) skip this post instead of pausing the whole task.
+   if(/No click sent|No reaction click was sent/.test(e.message))return{key,url,message:'Skipped: '+e.message};
+   if(/outcome is unknown/.test(e.message)){const b=D.reactionButton(find()?.row);if(b&&D.reacted(b)===true)return{key,url,performed:true,message:'Reacted to post (could not confirm it is '+c.reaction+'; check Facebook).'};return{key,url,message:'Skipped: reaction click was sent but could not be confirmed. Check this post on Facebook.'};}
+   throw e;
+  }finally{if(c.action!=='like')await closeDialogs(id,s);}
   return{...r,key,url};
  }
  return{end:true,message:'Stopped after scrolling 80 times without finishing this feed.'};
