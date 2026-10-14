@@ -73,7 +73,7 @@ const D=globalThis.AuroraDOM={
   if(this.keys?.has(a))return this.keys.get(a);
   const link=[...a.querySelectorAll('a[href]')].filter(l=>!l.closest('[aria-label*="Comment by" i],[data-testid*="comment" i]')).map(l=>S.postURL(l.href)).find(Boolean);
   let key=link?S.pageKey(link):null;
-  if(!key){const t=String(a.innerText||'').replace(/\s+/g,' ').trim().slice(0,160);if(t.length<20)return null;let h=0;for(const ch of t)h=(h*31+ch.codePointAt(0))|0;key='txt:'+h;}
+  if(!key){const t=String(a.innerText||'').replace(/\s+/g,' ').trim().slice(0,160);if(!t)return null;let h=0;for(const ch of t)h=(h*31+ch.codePointAt(0))|0;key='txt:'+h;}
   (this.keys??=new WeakMap).set(a,key);return key;
  },
  feedPosts(){
@@ -91,7 +91,17 @@ const D=globalThis.AuroraDOM={
  author(root){return [...root.querySelectorAll('h2 a[href],h3 a[href],strong a[href],a[data-profile-link]')].filter(e=>this.visible(e)).map(e=>S.profileURL(e.href)).find(Boolean)||null;},
  actor(){return [...document.querySelectorAll('[role="banner"] a[href],nav a[href],[role="navigation"] a[href]')].filter(e=>this.visible(e)&&(/^(Your profile|Profile|Account)$/i.test(e.getAttribute('aria-label')||'')||e.querySelector('img[alt="Your profile"],img[alt="Your profile picture"]'))).map(e=>S.profileURL(e.href)).find(Boolean)||null;},
  reactionControl(e){return !/^(?:Like|Love|Care|Haha|Wow|Sad|Angry):|\d+\s*(?:people|person|reaction)|see who reacted/i.test(this.text(e))&&(/^(Like|Love|Care|Haha|Wow|Sad|Angry|(?:Remove |Change |You reacted with )(?:Like|Love|Care|Haha|Wow|Sad|Angry)(?: reaction)?)$/.test(this.text(e))||!!this.selectedReaction(e));},
- reactionButton(root){const arr=this.ownControls(root).filter(e=>this.reactionControl(e));return arr.length===1?arr[0]:null;},
+ reactionButton(root){const arr=this.ownControls(root).filter(e=>this.reactionControl(e));return arr.length===1?arr[0]:this.lenient?this.looseLike(root):null;},
+ // Feed mode only: Facebook's feed markup varies, so accept any labelled Like control in the post's own action row.
+ looseLike(a){
+  const names=/^(Like|Love|Care|Haha|Wow|Sad|Angry|(?:Remove |Change |You reacted with )(?:Like|Love|Care|Haha|Wow|Sad|Angry)(?: reaction)?)$/;
+  const own=[...a.querySelectorAll('[role="button"],button,[aria-label],[tabindex="0"]')].filter(e=>this.visible(e)&&e.getAttribute('aria-disabled')!=='true'&&!e.closest('[aria-label*="Comment by" i],[aria-label*="Reply by" i],[data-testid*="comment" i]')&&e.closest('[role="article"]')===a);
+  const hits=own.filter(e=>names.test(this.text(e))||this.selectedReaction(e)),outer=hits.filter(e=>!hits.some(o=>o!==e&&e.contains(o)));
+  const row=outer.filter(e=>{for(let p=e.parentElement;p&&p!==a;p=p.parentElement){const t=[...p.querySelectorAll('[role="button"],button,[aria-label]')].map(x=>this.text(x));if(t.some(x=>/^Comment/.test(x))&&t.some(x=>/^(Share|Send)/.test(x)))return true;}return false;});
+  return (row.length?row:outer)[0]||null;
+ },
+ describeControls(a){return [...a.querySelectorAll('[role="button"],button,[aria-label]')].filter(e=>this.visible(e)).map(e=>this.text(e).slice(0,24)).filter(Boolean).slice(0,14).join(' | ');},
+
  reactionName(e){
   const names=['Like','Love','Care','Haha','Wow','Sad','Angry'];
   const values=[e.getAttribute('alt'),e.getAttribute('aria-label'),e.getAttribute('title'),e.getAttribute('data-reaction'),e.getAttribute('data-reaction-type'),e.textContent,...[...e.querySelectorAll('[aria-label],[title],img[alt]')].flatMap(n=>[n.getAttribute('aria-label'),n.getAttribute('title'),n.getAttribute('alt')])];

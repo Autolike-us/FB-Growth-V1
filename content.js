@@ -54,10 +54,11 @@ if(c.action==='share'){const shares=D.ownControls(root()).filter(e=>/^(Share|Sha
 // Feed mode: work down the page the way a person does. Take the first post not handled yet, react/comment in place, then scroll on.
 const feedIgnored=new Set();
 async function closeDialogs(id){for(let n=0;n<3;n++){const d=D.dialogs().find(x=>D.button(x,'Close'));if(!d)return;await active(id);D.button(d,'Close').click();await wait(600);}}
-async function feed(s,c,id,seen){
+async function feed(s,c,id,seen){D.lenient=true;try{return await feedRun(s,c,id,seen);}finally{D.lenient=false;}}
+async function feedRun(s,c,id,seen){
  await closeDialogs(id);
  if(!await until(()=>D.feedArticles().length,id,12000))throw Error('No posts appeared. Load an accessible page/group/hashtag and resume.');
- let idle=0;
+ let idle=0,ignored=0;
  for(let i=0;i<60;i++){
   await active(id);
   const article=D.feedArticles().find(a=>{const k=D.articleKey(a);return k&&!seen.has(k)&&!feedIgnored.has(k);});
@@ -72,7 +73,7 @@ async function feed(s,c,id,seen){
   const key=D.articleKey(article),find=()=>D.feedArticles().find(a=>D.articleKey(a)===key)||null;
   article.scrollIntoView({block:'start',behavior:'instant'});await wait(500);
   const bar=await until(()=>{const a=find();return a&&D.reactionButton(a);},id,2500);
-  if(!bar){feedIgnored.add(key);T('Ignored non-post block',key);continue;}
+  if(!bar){feedIgnored.add(key);ignored++;const what=D.describeControls(find()||article);T('No Like button in block',key,what);if(ignored>=4)throw Error('Could not find a Like button on the posts. Controls seen in the last block: '+(what||'none')+'.');continue;}
   const url=[...find().querySelectorAll('a[href]')].map(a=>S.postURL(a.href)).find(Boolean)||s.url;
   const author=D.author(find());
   if(author&&AuroraEngine.excluded(author,'',c))return{key,url,message:'Skipped: excluded post author.'};
