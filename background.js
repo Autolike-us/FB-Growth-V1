@@ -99,7 +99,7 @@ async function tick(){
   let gap=quick();
   if(step.kind==='posts')job.message=`Discovered ${more.length} ${step.kind==='posts'?'posts':'profiles'}. ${r.note||''}`;
   else{if(r.performed||r.preview){gap=pause(job);job.done=(job.done||0)+1;if(r.performed){job.counts[job.config.action]++;await bumpDaily();}else job.previewed++;}else if(step.kind!=='feed'||r.key)job.skipped++;job.liked=job.counts.like;job.message=r.message;}
-  await log(job.message,r.url||step.url);await dlog('info','→ '+job.message,/^Skipped/.test(job.message||'')?ctx(r):undefined);
+  await log(job.message,r.url||step.url);await dlog('info','→ '+job.message,/^Skipped|could not confirm/.test(job.message||'')?ctx(r):undefined);
   if(interrupted){job.message=latest.message+' Last result: '+job.message;await save(job);return;}
   if(!job.queue.length||(job.done||0)>=job.config.limit){await finish(job);return;}
   job.nextAt=Date.now()+gap;await save(job);await schedule(job);

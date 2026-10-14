@@ -124,9 +124,12 @@ const D=globalThis.AuroraDOM={
   for(const feed of document.querySelectorAll('[role="feed"]'))if(this.visible(feed)&&!feed.closest(blocked))links.push(...feed.querySelectorAll('a[href*="/reel/"]'));
   return [...new Set(links.filter(a=>this.visible(a)&&!a.closest(blocked)).map(a=>S.postURL(a.href)).filter(Boolean))];
  },
- header(){const main=this.scope();if(!main)return null;return main.querySelector('[data-pagelet="ProfileTiles"],[data-pagelet="ProfileHeader"],[data-pagelet="PageHeader"],[data-pagelet="GroupHeader"]')||main;},
+ // The whole main column: ProfileTiles is the Intro/Photos side panel (no Follow button), and newer headers carry no h1 or pagelet marker.
+ header(){return this.scope();},
  headerControls(){return this.controls(this.header()).filter(e=>!e.closest('[role="article"]'));},
  // A page can show the same Follow/Message button twice (header and sticky bar); the first one in the document is the real header.
+ // Match a header control by pattern: Facebook puts the person's name in some labels ("Add Friend Jane Doe").
+ headerMatch(re){return this.headerControls().find(e=>re.test(this.text(e)))||null;},
  headerButton(...labels){const buttons=this.headerControls().filter(e=>labels.includes(this.text(e)));return buttons[0]||null;},
  author(root){return [...root.querySelectorAll('h2 a[href],h3 a[href],strong a[href],a[data-profile-link]')].filter(e=>this.visible(e)).map(e=>S.profileURL(e.href)).find(Boolean)||null;},
  actor(){return [...document.querySelectorAll('[role="banner"] a[href],nav a[href],[role="navigation"] a[href]')].filter(e=>this.visible(e)&&(/^(Your profile|Profile|Account)$/i.test(e.getAttribute('aria-label')||'')||e.querySelector('img[alt="Your profile"],img[alt="Your profile picture"]'))).map(e=>S.profileURL(e.href)).find(Boolean)||null;},
