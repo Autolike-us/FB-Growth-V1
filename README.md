@@ -94,3 +94,6 @@ For page, group and hashtag targets, Like and Comment now work down the feed in 
 
 ## Version 2.0.13: comment and share in the feed
 Comment and Share now use the same in-feed walk as reactions. For each post Aurora opens the Comment control (Facebook labels it "Leave a comment"), types your text one character at a time with natural pauses, sends it, closes any pop-up Facebook opened, and moves to the next post. Share opens the post's Share menu and chooses Share now. Reactions: the palette is waited out and a stubborn post is skipped rather than pausing the task. Follow, unfollow, friend and join still visit each listed page/group; their header button now uses the first match when Facebook shows it twice.
+
+## Version 2.0.16: unfollow via Follow settings, page IDs
+Unfollow now handles Facebook's "Follow settings" dialog: it picks the Unfollow radio and presses Update (the older menu is still supported). Pages can be targeted by a bare numeric ID or a `profile.php?id=…` link; if Facebook redirects the ID to the page's username, Aurora continues on the redirected page instead of stopping.

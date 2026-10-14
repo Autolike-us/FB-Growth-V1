@@ -73,6 +73,8 @@ async function tick(){
   const step=job.queue[0];let tab;try{tab=await chrome.tabs.get(job.tabId);}catch{throw Error('The task tab was closed. Resume to open a new tab.');}
   if(tab.status!=='complete'){job.nextAt=Date.now()+2000;await save(job);await schedule(job);return;}
   if(/\/(?:login|checkpoint|recover)(?:[/?]|$)/.test(tab.url||''))throw Error('Sign in or complete verification on Facebook, then resume.');
+  // A page opened by numeric ID (profile.php?id=…) is often redirected by Facebook to its username. Follow that redirect instead of stopping.
+  if(job.navigation?.target===step.url&&job.navigation.attempts>=2&&['account','feed'].includes(step.kind)){const landed=AuroraSelectors.profileURL(tab.url);if(landed&&AuroraSelectors.profileURL(step.url)&&AuroraSelectors.pageKey(landed)!==AuroraSelectors.pageKey(step.url)){await dlog('info','Facebook redirected '+short(step.url)+' to '+short(landed)+'; continuing there');step.url=landed;job.navigation=null;}}
   if(AuroraSelectors.pageKey(tab.url)!==AuroraSelectors.pageKey(step.url)){
    if(job.navigation?.target===step.url&&job.navigation.attempts>=2)throw Error('Facebook redirected away from this target. Check the task tab and resume; Aurora stopped retrying the URL.');
    job.navigation={target:step.url,attempts:job.navigation?.target===step.url?job.navigation.attempts+1:1};job.message='Opening '+step.url;job.nextAt=Date.now()+2000;await save(job);await dlog('info','Opening '+short(step.url)+(job.navigation.attempts>1?` (attempt ${job.navigation.attempts})`:''));await chrome.tabs.update(job.tabId,{url:step.url,active:true});await schedule(job);return;
