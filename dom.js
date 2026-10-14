@@ -9,7 +9,9 @@ const D=globalThis.AuroraDOM={
  dialogs(){return [...document.querySelectorAll('[role="dialog"],[role="alertdialog"]')].filter(e=>this.visible(e));},
  ownControls(root){return this.controls(root).filter(e=>{if(e.closest('[aria-label*="Comment by" i],[data-testid*="comment" i]'))return false;const a=e.closest('[role="article"]');return !a||a===root||!root.contains(a);});},
  postRoot(url){
-  const key=S.pageKey(url),main=this.scope();if(!main||!S.postURL(url))return null;
+  const key=S.pageKey(url),photo=/^\/photo(?:\.php|\/)?$/.test(location.pathname);
+  // Facebook photo theater can live beside an empty main node rather than inside it.
+  const main=photo&&S.pageKey(location.href)===key?document.body:this.scope();if(!main||!S.postURL(url))return null;
   const linksMatch=e=>[...e.querySelectorAll('a[href]')].some(a=>S.postURL(a.href)&&S.pageKey(a.href)===key);
   const all=[...document.querySelectorAll('[role="article"]')].filter(e=>this.visible(e)&&!e.parentElement?.closest('[role="article"]'));
   const matched=all.filter(a=>linksMatch(a)&&!a.matches('[aria-label*="Comment by" i],[data-testid*="comment" i]')&&this.reactionButton(a)&&this.ownControls(a).some(e=>/^(Share|Share this post)$/.test(this.text(e))));if(matched.length===1)return matched[0];
