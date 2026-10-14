@@ -165,3 +165,10 @@ main a{color:var(--accent);text-decoration:underline;text-underline-offset:3px}
 .dark .modebar.mode-live{color:#ff9aa0}
 .popup .modebar{font-size:11px;padding:8px 10px}
 [hidden]{display:none!important}
+.setups{margin-top:24px}
+.setups .row{display:flex;gap:8px;flex-wrap:wrap}
+.setups .row button{flex:1 1 auto}
+.setups select,.setups input{width:100%}
+.setups .row{margin:12px 0}
+.setups .row button{flex:1 1 0;padding:10px 8px;white-space:nowrap}
+.setups #presetName{margin-top:4px}

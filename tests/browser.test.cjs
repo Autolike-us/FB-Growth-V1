@@ -172,6 +172,8 @@ check('browser fixtures produce no uncaught page errors',!errors.length);await p
  for(const a of ['follow','unfollow','friend','join']){await setAction(a);check(a+' hides reaction, comment box, posts-per-target and the source picker',!await vis('#reactionGroup')&&!await vis('#commentGroup')&&!await vis('#perUser')&&!await vis('#mode'));}
  await setAction('join');check('Join relabels the target box for groups',/Groups to join/.test(await ui.textContent('label[for="target"]')));
  await setAction('friend');check('Friend hint mentions numeric profile IDs',/numeric IDs/.test(await ui.textContent('#hint')));
+ check('Saved setups sits in the right column directly under the Live session card, outside the task form',await ui.evaluate(()=>{const live=document.querySelector('article.live'),setups=document.querySelector('article.setups');return !!live&&!!setups&&live.parentElement===setups.parentElement&&live.nextElementSibling===setups&&!document.getElementById('task').contains(document.getElementById('presetSave'));}));
+ await ui.fill('#presetName','Morning likes');await ui.click('#presetSave');await ui.waitForTimeout(300);check('saving a setup from its new place still works',await ui.evaluate(()=>[...document.getElementById('presetList').options].some(o=>o.value==='Morning likes')));
  await ui.close();await uiCtx.close();
 }
 console.log(JSON.stringify({passed,scope:'offline DOM and UI fixtures; not installed-extension or live-account verification'}));}finally{await browser.close();}})().catch(e=>{console.error(e);process.exit(1);});
