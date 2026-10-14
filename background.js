@@ -55,7 +55,7 @@ async function finish(job){
 }
 // Send a step to the task tab; if the content script is missing (extension reloaded, tab opened earlier), attach it once and retry.
 async function sendStep(job,step){
- const msg={action:'step',step,config:job.config,jobId:job.id};
+ const msg={action:'step',step:step.kind==='feed'?{...step,seen:job.seen||[]}:step,config:job.config,jobId:job.id};
  try{return await chrome.tabs.sendMessage(job.tabId,msg);}
  catch(err){
   await dlog('warn','Page script not reachable, re-attaching it',String(err?.message||err));
@@ -78,7 +78,7 @@ async function tick(){
    job.navigation={target:step.url,attempts:job.navigation?.target===step.url?job.navigation.attempts+1:1};job.message='Opening '+step.url;job.nextAt=Date.now()+2000;await save(job);await dlog('info','Opening '+short(step.url)+(job.navigation.attempts>1?` (attempt ${job.navigation.attempts})`:''));await chrome.tabs.update(job.tabId,{url:step.url,active:true});await schedule(job);return;
   }
 
-  const action=['account','engage'].includes(step.kind)&&!job.config.dry;
+  const action=['account','engage','feed'].includes(step.kind)&&!job.config.dry;
   if(action&&job.config.dailyCap&&await dailyCount()>=job.config.dailyCap)throw Error(`Daily cap reached (${job.config.dailyCap} actions today). Resume tomorrow or raise the cap in the studio.`);
   job.navigation=null;job.message='Reading Facebook: '+step.kind;await save(job);
   if(action){job.inFlight=true;await save(job);}
@@ -90,9 +90,12 @@ async function tick(){
   if(r?.error){await dlog('error','Step failed: '+r.error,ctx(r));throw Error(r.error);}if(!r)throw Error('Facebook returned no result.');
   job.retries=0;
   if(r.wait){job.message=r.wait;job.nextAt=Date.now()+3000;await save(job);await schedule(job);return;}
-  job.queue.shift();const more=AuroraEngine.expand(job,step,r);job.queue.unshift(...more);
+  const handled=step.kind==='feed'&&!!r.postKey;if(handled){job.seen??=[];job.seen.push(r.postKey);if(job.seen.length>2000)job.seen=job.seen.slice(-2000);if(r.performed||r.preview)step.count=(step.count||0)+1;}
+  if(step.kind!=='feed'||r.finished||(step.count||0)>=job.config.perUser)job.queue.shift();else job.queue[0]=step;
+  const more=AuroraEngine.expand(job,step,r);job.queue.unshift(...more);
   let gap=quick();
   if(step.kind==='posts')job.message=`Discovered ${more.length} ${step.kind==='posts'?'posts':'profiles'}. ${r.note||''}`;
+  else if(step.kind==='feed'&&!handled){gap=quick();job.message=r.message||r.note;}
   else{if(r.performed||r.preview){gap=pause(job);job.done=(job.done||0)+1;if(r.performed){job.counts[job.config.action]++;await bumpDaily();}else job.previewed++;}else job.skipped++;job.liked=job.counts.like;job.message=r.message;}
   await log(job.message,step.url);await dlog('info','→ '+job.message,/^Skipped/.test(job.message||'')?ctx(r):undefined);
   if(interrupted){job.message=latest.message+' Last result: '+job.message;await save(job);return;}
@@ -123,7 +126,7 @@ async function nativeReactionClick(m,s){
  const {job}=await chrome.storage.local.get('job');
  if(s.id!==chrome.runtime.id||!s.tab||!s.url?.startsWith(base)||job?.tabId!==s.tab.id||job.id!==m.jobId||job.status!=='running'||job.config.dry||job.config.action!=='like'||job.config.reaction!==m.reaction||m.reaction==='Like')throw Error('Native input does not match the active Facebook reaction task.');
  const step=job.queue[0],tab=await chrome.tabs.get(job.tabId);
- if(step?.kind!=='engage'||AuroraSelectors.pageKey(tab.url)!==AuroraSelectors.pageKey(step.url)||AuroraSelectors.pageKey(m.url)!==AuroraSelectors.pageKey(step.url))throw Error('Native input target changed. No click sent.');
+ if(!['engage','feed'].includes(step?.kind)||AuroraSelectors.pageKey(tab.url)!==AuroraSelectors.pageKey(step.url)||AuroraSelectors.pageKey(m.url)!==AuroraSelectors.pageKey(step.url))throw Error('Native input target changed. No click sent.');
  if(!Number.isFinite(m.x)||!Number.isFinite(m.y)||m.x<0||m.y<0||m.x>10000||m.y>10000)throw Error('Invalid native input position.');
  if(!await chrome.permissions.contains({permissions:['debugger']}))throw Error('Native mouse input permission is missing. Open the studio and start the task again.');
  const probe=async()=>{const [r]=await chrome.scripting.executeScript({target:{tabId:job.tabId},func:(x,y,reaction)=>{const e=document.elementFromPoint(x,y)?.closest('button,[role="button"],[role="radio"],[role="menuitem"],[data-interactable*="|click|"]');return !!e&&globalThis.AuroraDOM?.visible(e)&&globalThis.AuroraDOM.reactionName(e)===reaction&&!e.closest('[aria-label*="Comment by" i]');},args:[m.x,m.y,m.reaction]});return r?.result===true;};
@@ -142,7 +145,7 @@ async function nativeReactionClick(m,s){
 async function recordSuccessfulReaction(){
  if(busy)throw Error('Wait for the current step to finish.');
  const {job,receipts={}}=await chrome.storage.local.get(['job','receipts']);
- if(job?.status!=='paused'||job.config.action!=='like'||job.queue[0]?.kind!=='engage')throw Error('Only the current paused reaction can be recorded.');
+ if(job?.status!=='paused'||job.config.action!=='like'||!['engage','feed'].includes(job.queue[0]?.kind))throw Error('Only the current paused reaction can be recorded.');
  const [r]=await chrome.scripting.executeScript({target:{tabId:job.tabId},func:()=>globalThis.AuroraDOM?.actor()||'browser'});
  const step=job.queue[0],key=(r?.result||'browser')+':like:'+AuroraSelectors.pageKey(step.url)+':'+job.config.reaction;
  if(receipts[key]?.status!=='attempted')throw Error('No unconfirmed attempted reaction to record.');
@@ -153,7 +156,7 @@ async function recordSuccessfulReaction(){
 async function allowReactionRetry(){
  if(busy)throw Error("The current step is still finishing. Wait for its result before reviewing a retry.");
  const {job,receipts={}}=await chrome.storage.local.get(['job','receipts']);
- if(job?.status!=='paused'||job.config.action!=='like'||job.queue[0]?.kind!=='engage')throw Error('Only a paused reaction task can be reviewed for retry.');
+ if(job?.status!=='paused'||job.config.action!=='like'||!['engage','feed'].includes(job.queue[0]?.kind))throw Error('Only a paused reaction task can be reviewed for retry.');
  const [r]=await chrome.scripting.executeScript({target:{tabId:job.tabId},func:()=>globalThis.AuroraDOM?.actor()||'browser'});
  const key=(r?.result||'browser')+':like:'+AuroraSelectors.pageKey(job.queue[0].url)+':'+job.config.reaction;
  if(receipts[key]?.status!=='attempted')throw Error('No uncertain attempt for the current account and reaction. Confirmed actions are never reset.');
