@@ -25,8 +25,11 @@ let armed=null;
 const startLabel=()=>$('dry').checked?'✦ Start preview':'✦ Start live task';
 function disarm(){clearTimeout(armed);armed=null;$('start').textContent=startLabel();}
 // Always-visible reminder of whether the next run is a harmless preview or a real, live run.
+let liveTimer=null;
 function paintMode(){
- const bar=$('modeBar'),dry=$('dry').checked;bar.className='modebar '+(dry?'preview':'live');bar.textContent='';
+ const bar=$('modeBar'),dry=$('dry').checked;bar.className='modebar '+(dry?'mode-preview':'mode-live');bar.textContent='';
+ // Preview stays on screen as a standing reminder. The LIVE notice is shown for 2 seconds after switching, then tucks away (the start button keeps saying "Start live task").
+ clearTimeout(liveTimer);bar.hidden=false;if(!dry)liveTimer=setTimeout(()=>{if(!$('dry').checked)bar.hidden=true;},2000);
  const msg=document.createElement('span'),b=document.createElement('b');
  if(dry){b.textContent='👁 PREVIEW MODE';msg.append(b,' — Aurora only checks what it could do. Nothing will be liked, commented, followed, joined, shared or sent.');}
  else{b.textContent='⚡ LIVE MODE';msg.append(b,' — Aurora will perform real actions on your account.');}
