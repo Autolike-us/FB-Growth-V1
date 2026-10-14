@@ -141,9 +141,9 @@ body.popup{width:760px;height:600px;min-height:580px;overflow-y:auto}
 .popup .grid>div:last-child{align-self:start;min-width:0}
 .popup .hint{font-size:10px}
 .popup .banner{margin-top:12px;padding:12px 14px}
-.popup #task .startbar{position:fixed;bottom:0;left:0;width:760px;margin:0;padding:10px 20px 12px;border-radius:0;background:var(--solid);border-top:1px solid var(--border);z-index:5;box-shadow:0 -8px 24px -12px rgba(0,0,0,.25)}
-.popup #task .startbar .actions{position:static;margin:0;padding:0;background:none;border:0;box-shadow:none;width:auto}
-.popup main{padding-bottom:150px}
+.popup #task .actions{position:fixed;bottom:0;left:0;width:760px;margin:0;padding:12px 20px;background:var(--solid);border-top:1px solid var(--border);z-index:5;box-shadow:0 -8px 24px -12px rgba(0,0,0,.25)}
+.popup .kbdtip{display:none}
+.popup main{padding-bottom:90px}
 .popup .aside-bottom{display:block;margin:0}
 .popup .aside-bottom p,.popup .aside-bottom .badge{display:none}
 .popup #theme{font-size:0;padding:5px 12px}
@@ -194,7 +194,7 @@ details.sec[open]>summary small{display:none}
 .tcheck .why{color:var(--muted)}
 /* start bar + summary */
 .startbar{margin-top:18px}
-#task .startbar{position:sticky;bottom:0;z-index:4;background:var(--solid);margin:18px -24px -24px;padding:12px 24px 14px;border-top:1px solid var(--border);border-radius:0 0 24px 24px}
+#task .startbar{position:static;margin:18px 0 0;padding:0;border:0;background:none}
 .startbar .actions{margin:0}
 .summary{font-size:12px;line-height:1.5;margin:0 0 10px;padding:8px 12px;border-radius:12px;background:var(--tint);color:var(--ink)}
 .summary.is-live{background:rgba(250,56,62,.10);border:1px solid rgba(250,56,62,.35)}
@@ -231,8 +231,8 @@ nav button{position:relative}
 .firstrun .okmark{color:var(--ok);font-weight:700}.firstrun .nomark{color:var(--bad);font-weight:700}
 .popup .firstrun{font-size:11px;padding:10px 14px;margin-bottom:14px}
 /* keep focused/scrolled-to controls clear of the sticky Start bar */
-html{scroll-padding-bottom:170px}
-#task .startbar{scroll-margin-top:0}
+/* (no sticky Start bar any more: nothing to keep controls clear of) */
+
 
 /* ---- layout fixes ---- */
 nav button{display:flex;align-items:center;gap:8px;white-space:nowrap}

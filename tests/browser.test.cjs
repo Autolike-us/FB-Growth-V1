@@ -177,6 +177,7 @@ check('browser fixtures produce no uncaught page errors',!errors.length);await p
  for(const a of ['follow','unfollow','friend','join']){await setAction(a);check(a+' hides reaction, comment box, posts-per-target and the source picker',!await vis('#reactionGroup')&&!await vis('#commentGroup')&&!await vis('#perUser')&&!await vis('#mode'));}
  await setAction('join');check('Join relabels the target box for groups',/Groups to join/.test(await ui.textContent('label[for="target"]')));
  await setAction('friend');check('Friend hint mentions numeric profile IDs',/numeric IDs/.test(await ui.textContent('#hint')));
+ check('full studio: the Start/Save buttons are not sticky or fixed',await ui.evaluate(()=>['#task .startbar','#task .actions'].every(q=>!['sticky','fixed'].includes(getComputedStyle(document.querySelector(q)).position))));
  check('Saved setups sits in the right column directly under the Live session card, outside the task form',await ui.evaluate(()=>{const live=document.querySelector('article.live'),setups=document.querySelector('article.setups');return !!live&&!!setups&&live.parentElement===setups.parentElement&&live.nextElementSibling===setups&&!document.getElementById('task').contains(document.getElementById('presetSave'));}));
  await ui.fill('#presetName','Morning likes');await ui.click('#presetSave');await ui.waitForTimeout(300);check('saving a setup from its new place still works',await ui.evaluate(()=>[...document.getElementById('presetList').options].some(o=>o.value==='Morning likes')));
  await ui.evaluate(()=>{document.getElementById('secPace').open=true;document.getElementById('secAdv').open=true;});await setAction('comment');await ui.fill('#target','someuser, 12345678');await ui.fill('#comment','Great post!');await ui.fill('#exclude','bob');await ui.fill('#perUser','7');await ui.fill('#delay','90');await setDry(ui,false);
@@ -199,6 +200,8 @@ check('browser fixtures produce no uncaught page errors',!errors.length);await p
   await pp.evaluate(y=>window.scrollTo(0,0),0);
   const bars=await pp.evaluate(()=>{const inner=[...document.querySelectorAll('body *')].filter(e=>/auto|scroll/.test(getComputedStyle(e).overflowY)&&e.scrollHeight>e.clientHeight+2).map(e=>e.tagName+'.'+e.className);return{inner,sideways:document.documentElement.scrollWidth>document.documentElement.clientWidth+1||document.body.scrollWidth>document.body.clientWidth+1};});
   check('popup: no inner scrollbars (only the page scrolls) and no horizontal scrollbar',bars.inner.length===0&&!bars.sideways);
+  const pb=await pp.evaluate(()=>{const g=s=>getComputedStyle(document.querySelector(s)).position,r=document.querySelector('#task .actions').getBoundingClientRect();return{startbar:g('#task .startbar'),actions:g('#task .actions'),summary:g('#startSummary'),h:Math.round(r.height)};});
+  check('popup: only the compact Start/Save button bar is pinned (the summary line is ordinary text above it)',pb.startbar==='static'&&pb.actions==='fixed'&&pb.summary==='static'&&pb.h<80);
   await pp.close();await pop.close();
  }
  await ui.close();await uiCtx.close();

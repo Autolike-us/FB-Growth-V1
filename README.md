@@ -115,3 +115,6 @@ Unfollow now handles Facebook's "Follow settings" dialog: it picks the Unfollow 
 ## Version 2.0.25: single scrollbar, redesigned on-page panel
 - **Popup:** only the page scrolls (no inner scrollbars, no sideways scrollbar); the Start bar no longer sits 21px off the edge.
 - **Aurora panel on Facebook:** matches the studio (follows light/dark), shows a PREVIEW or LIVE badge, and shows only the controls that apply — the preview form when idle; Pause and Stop while running; Resume, **Skip this target**, Stop and Copy error report when paused — with "Target 2 of 5 · name · next in 24s" and a progress bar.
+
+## Version 2.0.26: no sticky Start bar
+The full studio's Start/Save buttons are ordinary form content again (nothing sticks to the window). In the popup the original compact Start/Save bar is back; the one-line summary is plain text just above it.
