@@ -158,7 +158,7 @@ check('browser fixtures produce no uncaught page errors',!errors.length);await p
  // Studio form: loaded as injected HTML (file:// navigation is unavailable with this launch flag) with a stubbed chrome.* API.
  const uiCtx=await browser.newContext(),ui=await uiCtx.newPage();ui.setDefaultTimeout(20000);ui.on('pageerror',e=>{throw e;});
  await ui.setContent(read('dashboard.html').replace(/<script src="[^"]*"><\/script>/g,'').replace(/<link[^>]*stylesheet[^>]*>/,''));
- await ui.evaluate(()=>{const store={};window.chrome={storage:{local:{get:async k=>{const o={};[].concat(k||[]).forEach(x=>{if(x in store)o[x]=store[x];});return o;},set:async o=>Object.assign(store,o),remove:async k=>{delete store[k];}},onChanged:{addListener(){}}},runtime:{getManifest:()=>({version:'9.9.9'}),sendMessage:async()=>({ok:true}),getURL:x=>x},permissions:{contains:async()=>true}};});
+ await ui.evaluate(()=>{const store={};window.chrome={storage:{local:{get:async k=>{const o={};[].concat(k||[]).forEach(x=>{if(x in store)o[x]=store[x];});return o;},set:async o=>Object.assign(store,o),remove:async k=>{[].concat(k).forEach(x=>delete store[x]);}},onChanged:{addListener(){}}},runtime:{getManifest:()=>({version:'9.9.9'}),sendMessage:async()=>({ok:true}),getURL:x=>x},permissions:{contains:async()=>true}};});
  await ui.addStyleTag({content:read('style.css').replace(/@import[^;]*;/g,'')});await ui.addScriptTag({content:read('report.js')});await ui.addScriptTag({content:read('dashboard.js')});await ui.waitForTimeout(600);
  const vis=sel=>ui.evaluate(s=>{const e=document.querySelector(s);return !!e&&!e.hidden&&getComputedStyle(e).display!=='none'&&!e.closest('[hidden]');},sel);
  const setAction=a=>ui.selectOption('#action',a);
@@ -178,6 +178,13 @@ check('browser fixtures produce no uncaught page errors',!errors.length);await p
  await setAction('friend');check('Friend hint mentions numeric profile IDs',/numeric IDs/.test(await ui.textContent('#hint')));
  check('Saved setups sits in the right column directly under the Live session card, outside the task form',await ui.evaluate(()=>{const live=document.querySelector('article.live'),setups=document.querySelector('article.setups');return !!live&&!!setups&&live.parentElement===setups.parentElement&&live.nextElementSibling===setups&&!document.getElementById('task').contains(document.getElementById('presetSave'));}));
  await ui.fill('#presetName','Morning likes');await ui.click('#presetSave');await ui.waitForTimeout(300);check('saving a setup from its new place still works',await ui.evaluate(()=>[...document.getElementById('presetList').options].some(o=>o.value==='Morning likes')));
+ await setAction('comment');await ui.fill('#target','someuser, 12345678');await ui.fill('#comment','Great post!');await ui.fill('#exclude','bob');await ui.fill('#perUser','7');await ui.fill('#delay','90');await ui.uncheck('#dry');
+ await ui.evaluate(()=>chrome.storage.local.set({draft:{action:'comment',target:'someuser',dry:false},config:{action:'comment',target:'someuser',comment:'Great post!',dry:false}}));
+ await ui.click('#reset');check('Reset asks for a second click before erasing',/Click again/.test(await ui.textContent('#reset'))&&await ui.inputValue('#target')==='someuser, 12345678');
+ await ui.click('#reset');await ui.waitForTimeout(200);
+ check('Reset erases the target, comment, exclude list and numbers back to factory defaults',await ui.inputValue('#target')===''&&await ui.inputValue('#comment')===''&&await ui.inputValue('#exclude')===''&&await ui.inputValue('#perUser')==='3'&&await ui.inputValue('#delay')==='30'&&await ui.inputValue('#action')==='like');
+ check('Reset puts Preview only back on',await ui.isChecked('#dry')&&/PREVIEW MODE/.test(await ui.textContent('#modeBar'))&&/Start preview/.test(await ui.textContent('#start')));
+ check('Reset forgets the remembered draft and last-started config so nothing returns on reopen',await ui.evaluate(async()=>{const o=await chrome.storage.local.get(['draft','config']);return !o.draft&&!o.config;}));
  await ui.close();await uiCtx.close();
 }
 console.log(JSON.stringify({passed,scope:'offline DOM and UI fixtures; not installed-extension or live-account verification'}));}finally{await browser.close();}})().catch(e=>{console.error(e);process.exit(1);});

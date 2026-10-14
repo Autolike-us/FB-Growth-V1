@@ -80,7 +80,14 @@ $('presetSave').onclick=async()=>{const name=$('presetName').value.trim();if(!na
 $('presetLoad').onclick=async()=>{const n=$('presetList').value;if(!n){notice('Choose a saved setup first.');return;}const p=await getPresets();if(!p[n]){notice('That setup no longer exists.');await renderPresets();return;}applyFields(p[n]);rememberForm();notice('Loaded “'+n+'”. Preview only is on — untick it to run live.');};
 $('presetDelete').onclick=async()=>{const n=$('presetList').value;if(!n){notice('Choose a saved setup first.');return;}twice($('presetDelete'),'Click again to delete',async()=>{const p=await getPresets();delete p[n];await chrome.storage.local.set({presets:p});await renderPresets();notice('Deleted “'+n+'”.');});};
 $('presetRename').onclick=async()=>{const n=$('presetList').value,to=$('presetName').value.trim();if(!n){notice('Choose a saved setup first.');return;}if(!to){notice('Type the new name in the name box.');return;}const p=await getPresets();if(p[to]&&to!==n){notice('A setup named “'+to+'” already exists.');return;}p[to]=p[n];if(to!==n)delete p[n];await chrome.storage.local.set({presets:p});await renderPresets(to);$('presetName').value='';notice('Renamed to “'+to+'”.');};
-$('reset').onclick=()=>twice($('reset'),'Click again to reset the form',async()=>{clearTimeout(draftTimer);disarm();applyFields(DEFAULTS);paintMode();await chrome.storage.local.remove('draft');notice('Form reset to defaults. Saved setups and history were kept.');});
+// Factory reset of the form: every field back to its default (Preview only on, target/comment/exclude empty), and the remembered draft AND the last-started config forgotten so nothing comes back on reopen. Saved setups and history are kept.
+$('reset').onclick=()=>twice($('reset'),'Click again to erase all fields',async()=>{
+ clearTimeout(draftTimer);disarm();
+ applyFields(DEFAULTS);$('dry').checked=true;$('presetName').value='';$('presetList').value='';
+ updateForm();paintMode();
+ await chrome.storage.local.remove(['draft','config']);
+ notice('Form reset to factory defaults: Preview only is on and the target, comment and other fields are cleared. Saved setups and history were kept.');
+});
 renderPresets();
 
 $('bannerRetryReaction').onclick=()=>send('allowReactionRetry');
