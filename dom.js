@@ -68,6 +68,45 @@ const D=globalThis.AuroraDOM={
   }
   return root;
  },
+ // Feed mode: locate posts by their action bar (Like + Comment/Share), not by role="article", which Facebook does not reliably set.
+ feedRows(){
+  const blocked='[role="dialog"],[role="alertdialog"],[data-pagelet*="Cover" i],[data-pagelet*="ProfileHeader" i],[aria-label*="Comment by" i],[aria-label*="Reply by" i],[data-testid*="comment" i]';
+  const commentish=t=>/^(Comment|Comments|Leave a comment|Comment on this post|Write a comment)/i.test(t),shareish=t=>/^(Share|Share this post|Send this to friends)/i.test(t);
+  const out=[];
+  // A reacted post exposes both "Remove Like" and "Change Like reaction"; only the first is the primary control.
+  const primary=e=>this.reactionControl(e)&&!/^Change /i.test(this.text(e));
+  for(const like of this.controls(document.body).filter(e=>primary(e)&&!e.closest(blocked))){
+   for(let n=like.parentElement,depth=0;n&&n!==document.body&&depth<8;n=n.parentElement,depth++){
+    const own=this.ownControls(n);
+    if(own.filter(primary).length!==1)break;
+    const labels=own.map(e=>this.text(e));
+    if(labels.some(commentish)||labels.some(shareish)||this.field(n)){
+     let box=n;for(let p=n.parentElement,i=0;p&&p!==document.body&&i<12;p=p.parentElement,i++){if(p.matches('[role="feed"],[role="main"],main'))break;box=p;if(p.matches('[role="article"]'))break;}
+     if(!out.some(o=>o.row===n))out.push({row:n,box,like});
+     break;
+    }
+   }
+  }
+  // Drop rows whose box swallowed another row (box climbed too far): shrink it back to the row.
+  for(const o of out)if(out.some(x=>x!==o&&o.box.contains(x.row)))o.box=o.row;
+  return out.filter(o=>this.visible(o.row)).sort((a,b)=>a.row.getBoundingClientRect().top-b.row.getBoundingClientRect().top);
+ },
+ rowKey(o){
+  if(this.keys?.has(o.row))return this.keys.get(o.row);
+  const link=[...o.box.querySelectorAll('a[href]')].filter(l=>!l.closest('[aria-label*="Comment by" i],[data-testid*="comment" i]')).map(l=>S.postURL(l.href)).find(Boolean);
+  let key=link?S.pageKey(link):null;
+  if(!key){const t=String(o.box.innerText||'').replace(/\s+/g,' ').trim().slice(0,160);if(t.length>=20){let h=0;for(const ch of t)h=(h*31+ch.codePointAt(0))|0;key='txt:'+h;}else key='pos:'+Math.round(scrollY+o.row.getBoundingClientRect().top);}
+  (this.keys??=new WeakMap).set(o.row,key);return key;
+ },
+ probe(){const seen=new Set(),out=[];for(const e of document.querySelectorAll('[aria-label],button,[role="button"]')){if(!this.visible(e))continue;const t=this.text(e).slice(0,40);if(/like|comment|share|react|send/i.test(t)&&!seen.has(t)){seen.add(t);out.push(t);}}return 'articles='+document.querySelectorAll('[role="article"]').length+'; controls: '+(out.slice(0,16).join(' | ')||'none');},
+ feedArticles(){return [...document.querySelectorAll('[role="article"]')].filter(e=>this.visible(e)&&!e.parentElement?.closest('[role="article"]')&&!e.closest('[role="dialog"],[role="alertdialog"],[data-pagelet*="Cover" i],[data-pagelet*="ProfileHeader" i]')&&!e.matches('[aria-label*="Comment by" i],[aria-label*="Reply by" i]')).sort((a,b)=>a.getBoundingClientRect().top-b.getBoundingClientRect().top);},
+ articleKey(a){
+  if(this.keys?.has(a))return this.keys.get(a);
+  const link=[...a.querySelectorAll('a[href]')].filter(l=>!l.closest('[aria-label*="Comment by" i],[data-testid*="comment" i]')).map(l=>S.postURL(l.href)).find(Boolean);
+  let key=link?S.pageKey(link):null;
+  if(!key){const t=String(a.innerText||'').replace(/\s+/g,' ').trim().slice(0,160);if(!t)return null;let h=0;for(const ch of t)h=(h*31+ch.codePointAt(0))|0;key='txt:'+h;}
+  (this.keys??=new WeakMap).set(a,key);return key;
+ },
  feedPosts(){
   const blocked='[aria-label*="Comment by" i],[data-testid*="comment" i],[data-pagelet*="Cover" i],[data-pagelet*="ProfileHeader" i],[data-pagelet*="PageHeader" i],[role="dialog"],[role="alertdialog"]';
   // Facebook can render its feed beside main or in a second main container.
@@ -83,7 +122,17 @@ const D=globalThis.AuroraDOM={
  author(root){return [...root.querySelectorAll('h2 a[href],h3 a[href],strong a[href],a[data-profile-link]')].filter(e=>this.visible(e)).map(e=>S.profileURL(e.href)).find(Boolean)||null;},
  actor(){return [...document.querySelectorAll('[role="banner"] a[href],nav a[href],[role="navigation"] a[href]')].filter(e=>this.visible(e)&&(/^(Your profile|Profile|Account)$/i.test(e.getAttribute('aria-label')||'')||e.querySelector('img[alt="Your profile"],img[alt="Your profile picture"]'))).map(e=>S.profileURL(e.href)).find(Boolean)||null;},
  reactionControl(e){return !/^(?:Like|Love|Care|Haha|Wow|Sad|Angry):|\d+\s*(?:people|person|reaction)|see who reacted/i.test(this.text(e))&&(/^(Like|Love|Care|Haha|Wow|Sad|Angry|(?:Remove |Change |You reacted with )(?:Like|Love|Care|Haha|Wow|Sad|Angry)(?: reaction)?)$/.test(this.text(e))||!!this.selectedReaction(e));},
- reactionButton(root){const arr=this.ownControls(root).filter(e=>this.reactionControl(e));return arr.length===1?arr[0]:null;},
+ reactionButton(root){const arr=this.ownControls(root).filter(e=>this.reactionControl(e));return arr.length===1?arr[0]:this.lenient?this.looseLike(root):null;},
+ // Feed mode only: Facebook's feed markup varies, so accept any labelled Like control in the post's own action row.
+ looseLike(a){
+  const names=/^(Like|Love|Care|Haha|Wow|Sad|Angry|(?:Remove |Change |You reacted with )(?:Like|Love|Care|Haha|Wow|Sad|Angry)(?: reaction)?)$/;
+  const own=[...a.querySelectorAll('[role="button"],button,[aria-label],[tabindex="0"]')].filter(e=>this.visible(e)&&e.getAttribute('aria-disabled')!=='true'&&!e.closest('[aria-label*="Comment by" i],[aria-label*="Reply by" i],[data-testid*="comment" i]')&&(()=>{const ar=e.closest('[role="article"]');return !ar||ar===a||!a.contains(ar);})());
+  const hits=own.filter(e=>names.test(this.text(e))||this.selectedReaction(e)),outer=hits.filter(e=>!hits.some(o=>o!==e&&e.contains(o)));
+  const row=outer.filter(e=>{for(let p=e.parentElement;p&&p!==a;p=p.parentElement){const t=[...p.querySelectorAll('[role="button"],button,[aria-label]')].map(x=>this.text(x));if(t.some(x=>/^Comment/.test(x))&&t.some(x=>/^(Share|Send)/.test(x)))return true;}return false;});
+  return (row.length?row:outer)[0]||null;
+ },
+ describeControls(a){return [...a.querySelectorAll('[role="button"],button,[aria-label]')].filter(e=>this.visible(e)).map(e=>this.text(e).slice(0,24)).filter(Boolean).slice(0,14).join(' | ');},
+
  reactionName(e){
   const names=['Like','Love','Care','Haha','Wow','Sad','Angry'];
   const values=[e.getAttribute('alt'),e.getAttribute('aria-label'),e.getAttribute('title'),e.getAttribute('data-reaction'),e.getAttribute('data-reaction-type'),e.textContent,...[...e.querySelectorAll('[aria-label],[title],img[alt]')].flatMap(n=>[n.getAttribute('aria-label'),n.getAttribute('title'),n.getAttribute('alt')])];
@@ -99,6 +148,7 @@ const D=globalThis.AuroraDOM={
   target.dispatchEvent(new PointerEvent('pointerenter',{...common,pointerType:'mouse',pointerId:1,isPrimary:true}));
   target.dispatchEvent(new MouseEvent('mouseover',common));target.dispatchEvent(new MouseEvent('mouseenter',common));
  },
+ unhover(element){const r=element.getBoundingClientRect(),common={bubbles:true,view:window,clientX:r.left+r.width/2,clientY:r.top+r.height/2,relatedTarget:document.body};for(const t of [element,document.elementFromPoint(common.clientX,common.clientY)].filter(Boolean)){t.dispatchEvent(new PointerEvent('pointerout',{...common,pointerType:'mouse',pointerId:1,isPrimary:true}));t.dispatchEvent(new PointerEvent('pointerleave',{...common,pointerType:'mouse',pointerId:1,isPrimary:true}));t.dispatchEvent(new MouseEvent('mouseout',common));t.dispatchEvent(new MouseEvent('mouseleave',common));}},
  press(element){
   const r=element.getBoundingClientRect(),clientX=r.left+r.width/2,clientY=r.top+r.height/2;
   const hit=document.elementFromPoint(clientX,clientY);const target=hit&&element.contains(hit)?hit:element;
