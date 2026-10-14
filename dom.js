@@ -79,7 +79,10 @@ const D=globalThis.AuroraDOM={
  author(root){return [...root.querySelectorAll('h2 a[href],h3 a[href],strong a[href],a[data-profile-link]')].filter(e=>this.visible(e)).map(e=>S.profileURL(e.href)).find(Boolean)||null;},
  actor(){return [...document.querySelectorAll('[role="banner"] a[href],nav a[href],[role="navigation"] a[href]')].filter(e=>this.visible(e)&&(/^(Your profile|Profile|Account)$/i.test(e.getAttribute('aria-label')||'')||e.querySelector('img[alt="Your profile"],img[alt="Your profile picture"]'))).map(e=>S.profileURL(e.href)).find(Boolean)||null;},
  reactionControl(e){return !/^(?:Like|Love|Care|Haha|Wow|Sad|Angry):|\d+\s*(?:people|person|reaction)|see who reacted/i.test(this.text(e))&&(/^(Like|Love|Care|Haha|Wow|Sad|Angry|(?:Remove |Change |You reacted with )(?:Like|Love|Care|Haha|Wow|Sad|Angry)(?: reaction)?)$/.test(this.text(e))||!!this.selectedReaction(e));},
- reactionButton(root){const arr=this.ownControls(root).filter(e=>this.reactionControl(e));return arr.length===1?arr[0]:null;},
+ reactionButton(root){const arr=this.ownControls(root).filter(e=>this.reactionControl(e));if(arr.length===1)return arr[0];
+  // A feed post article can expose its action row plus a second labelled reaction control; take the one sharing a row with Comment/Share.
+  if(arr.length>1&&root?.matches?.('[role="article"]')){const rows=arr.filter(b=>{for(let n=b.parentElement;n&&root.contains(n);n=n.parentElement){const t=this.controls(n).map(c=>this.text(c));if(t.some(x=>/^(Comment|Comments|Comment on this post|Leave a comment)$/.test(x))&&t.some(x=>/^(Share|Share this post)$/.test(x)))return true;}return false;});if(rows.length===1)return rows[0];}
+  return null;},
  reactionName(e){
   const names=['Like','Love','Care','Haha','Wow','Sad','Angry'];
   const values=[e.getAttribute('alt'),e.getAttribute('aria-label'),e.getAttribute('title'),e.getAttribute('data-reaction'),e.getAttribute('data-reaction-type'),e.textContent,...[...e.querySelectorAll('[aria-label],[title],img[alt]')].flatMap(n=>[n.getAttribute('aria-label'),n.getAttribute('title'),n.getAttribute('alt')])];
