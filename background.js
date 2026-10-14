@@ -117,17 +117,50 @@ async function resumeTask(){
  job.status='running';job.waitingCaptcha=false;job.navigation=null;job.retries=0;job.nextAt=Date.now()+1000;job.message='Resumed.';
  await save(job);await schedule(job);await dlog('info','Resumed');return{ok:true,message:job.message};
 }
+// Native input is restricted to the currently running, explicitly configured Facebook reaction.
+async function nativeReactionClick(m,s){
+ m.nativeDispatchStarted=false;
+ const {job}=await chrome.storage.local.get('job');
+ if(s.id!==chrome.runtime.id||!s.tab||!s.url?.startsWith(base)||job?.tabId!==s.tab.id||job.id!==m.jobId||job.status!=='running'||job.config.dry||job.config.action!=='like'||job.config.reaction!==m.reaction||m.reaction==='Like')throw Error('Native input does not match the active Facebook reaction task.');
+ const step=job.queue[0],tab=await chrome.tabs.get(job.tabId);
+ if(step?.kind!=='engage'||AuroraSelectors.pageKey(tab.url)!==AuroraSelectors.pageKey(step.url)||AuroraSelectors.pageKey(m.url)!==AuroraSelectors.pageKey(step.url))throw Error('Native input target changed. No click sent.');
+ if(!Number.isFinite(m.x)||!Number.isFinite(m.y)||m.x<0||m.y<0||m.x>10000||m.y>10000)throw Error('Invalid native input position.');
+ if(!await chrome.permissions.contains({permissions:['debugger']}))throw Error('Native mouse input permission is missing. Open the studio and start the task again.');
+ const probe=async()=>{const [r]=await chrome.scripting.executeScript({target:{tabId:job.tabId},func:(x,y,reaction)=>{const e=document.elementFromPoint(x,y)?.closest('button,[role="button"],[role="radio"],[role="menuitem"],[data-interactable*="|click|"]');return !!e&&globalThis.AuroraDOM?.visible(e)&&globalThis.AuroraDOM.reactionName(e)===reaction&&!e.closest('[aria-label*="Comment by" i]');},args:[m.x,m.y,m.reaction]});return r?.result===true;};
+ if(!await probe())throw Error('The native reaction control is no longer under the pointer. No click sent.');
+ const target={tabId:job.tabId};let attached=false;
+ try{
+  try{await chrome.debugger.attach(target,'1.3');attached=true;}catch{throw Error('Close DevTools on the Facebook task tab, then resume. Native input could not attach; no click sent.');}
+  const latest=(await chrome.storage.local.get('job')).job;if(latest?.id!==job.id||latest.status!=='running'||!await probe())throw Error('Task or reaction target changed before native input. No click sent.');
+  await chrome.debugger.sendCommand(target,'Input.dispatchMouseEvent',{type:'mouseMoved',x:m.x,y:m.y,button:'none',buttons:0});
+  m.nativeDispatchStarted=true;
+  await chrome.debugger.sendCommand(target,'Input.dispatchMouseEvent',{type:'mousePressed',x:m.x,y:m.y,button:'left',buttons:1,clickCount:1});
+  await chrome.debugger.sendCommand(target,'Input.dispatchMouseEvent',{type:'mouseReleased',x:m.x,y:m.y,button:'left',buttons:0,clickCount:1});
+  await dlog('info','Native '+m.reaction+' reaction click dispatched');return {ok:true};
+ }finally{if(attached)try{await chrome.debugger.detach(target);}catch{}}
+}
+async function allowReactionRetry(){
+ if(busy)throw Error("The current step is still finishing. Wait for its result before reviewing a retry.");
+ const {job,receipts={}}=await chrome.storage.local.get(['job','receipts']);
+ if(job?.status!=='paused'||job.config.action!=='like'||job.queue[0]?.kind!=='engage')throw Error('Only a paused reaction task can be reviewed for retry.');
+ const [r]=await chrome.scripting.executeScript({target:{tabId:job.tabId},func:()=>globalThis.AuroraDOM?.actor()||'browser'});
+ const key=(r?.result||'browser')+':like:'+AuroraSelectors.pageKey(job.queue[0].url)+':'+job.config.reaction;
+ if(receipts[key]?.status!=='attempted')throw Error('No uncertain attempt for the current account and reaction. Confirmed actions are never reset.');
+ delete receipts[key];await chrome.storage.local.set({receipts});job.inFlight=false;job.message='You confirmed that no reaction was applied. Press Resume to retry this target once.';await save(job);await dlog('warn','Manual review: allowed retry of the current reaction target');return{ok:true,message:job.message};
+}
 chrome.runtime.onMessage.addListener((m,s,respond)=>{
+ if(m.action==='nativeReactionClick'){nativeReactionClick(m,s).then(respond,e=>respond({ok:false,error:e.message,noClick:m.nativeDispatchStarted===false}));return true;}
  const ownPage=[chrome.runtime.getURL('dashboard.html'),chrome.runtime.getURL('popup.html')].includes(s.url?.split(/[?#]/)[0]);
  const panel=s.tab&&s.url?.startsWith(base)&&['openStudio','previewProfile','pause','resume','stop'].includes(m.action);
  if(s.id!==chrome.runtime.id||(!ownPage&&!panel)){respond({ok:false,error:'Dashboard commands only.'});return;}
  (async()=>{
   if(m.action==='openStudio'){await chrome.tabs.create({url:chrome.runtime.getURL('dashboard.html')});return{ok:true};}
   if(m.action==='previewProfile')m={action:'start',config:{action:'like',reaction:'👍 Like',mode:'users',target:m.target,perUser:3,limit:3,delay:30,dailyCap:0,exclude:'',dry:true}};
+  if(m.action==='allowReactionRetry')return allowReactionRetry();
   if(m.action==='save'){await chrome.storage.local.set({config:m.config});return{ok:true};}
   if(m.action==='start'){
    if(busy)throw Error('A step is finishing. Try again shortly.');const old=(await chrome.storage.local.get('job')).job;if(['running','paused'].includes(old?.status))throw Error('Stop the current task first.');
-   const config=AuroraEngine.config(m.config),queue=AuroraEngine.initial(config);if(!queue.length)throw Error('All targets are excluded.');
+   const config=AuroraEngine.config(m.config),queue=AuroraEngine.initial(config);if(!config.dry&&config.action==='like'&&config.reaction!=='Like'&&!await chrome.permissions.contains({permissions:['debugger']}))throw Error('Allow native mouse input in the studio to run this reaction.');if(!queue.length)throw Error('All targets are excluded.');
    await chrome.storage.local.set({config:m.config});const tab=await taskTab(queue[0].url);
    const job={version:4,id:crypto.randomUUID(),config,queue,tabId:tab.id,status:'running',counts:{like:0,follow:0,unfollow:0,comment:0,friend:0,join:0,share:0},done:0,liked:0,previewed:0,skipped:0,seen:[],seenUsers:[],nextAt:Date.now()+2000,message:`${config.dry?'Preview':'Live'} ${config.action} task started. Waiting for Facebook.`};
    await save(job);await log(job.message);await dlog('info',job.message,{action:config.action,reaction:config.reaction,mode:config.mode,target:String(config.target||'').slice(0,200),limit:config.limit,perUser:config.perUser,scanLimit:config.scanLimit,delay:config.delay,dailyCap:config.dailyCap,preview:config.dry,steps:queue.length});await schedule(job);return{ok:true,message:job.message};

@@ -21,11 +21,11 @@ const D=globalThis.AuroraDOM={
   // Some permalinks expose comment rows as articles but no article for the post itself.
   // A post action row must contain reaction + Comment + Share, excluding Like/Reply rows.
   const rows=[];
-  for(const reaction of this.controls(main).filter(e=>/^(Like|Love|Care|Haha|Wow|Sad|Angry|Remove (?:Like|Love|Care|Haha|Wow|Sad|Angry))$/.test(this.text(e)))){
+  for(const reaction of this.controls(main).filter(e=>/^(Like|Love|Care|Haha|Wow|Sad|Angry|(?:Remove |Change |You reacted with )(?:Like|Love|Care|Haha|Wow|Sad|Angry)(?: reaction)?)$/.test(this.text(e)))){
    if(reaction.closest('[aria-label*="Comment by" i],[data-testid*="comment" i]'))continue;
    for(let node=reaction.parentElement;node&&main.contains(node);node=node.parentElement){
     const controls=this.controls(node),labels=controls.map(e=>this.text(e));
-    const hearts=controls.filter(e=>/^(Like|Love|Care|Haha|Wow|Sad|Angry|Remove (?:Like|Love|Care|Haha|Wow|Sad|Angry))$/.test(this.text(e)));
+    const hearts=controls.filter(e=>/^(Like|Love|Care|Haha|Wow|Sad|Angry|(?:Remove |Change |You reacted with )(?:Like|Love|Care|Haha|Wow|Sad|Angry)(?: reaction)?)$/.test(this.text(e)));
     if(hearts.length!==1)break;
     if(labels.some(t=>/^(Comment|Comment on this post|Leave a comment)$/.test(t))&&labels.some(t=>/^(Share|Share this post)$/.test(t))){rows.push(node);break;}
     if(node===main)break;
@@ -52,10 +52,10 @@ const D=globalThis.AuroraDOM={
  headerButton(...labels){const buttons=this.headerControls().filter(e=>labels.includes(this.text(e)));return buttons.length===1?buttons[0]:null;},
  author(root){return [...root.querySelectorAll('h2 a[href],h3 a[href],strong a[href],a[data-profile-link]')].filter(e=>this.visible(e)).map(e=>S.profileURL(e.href)).find(Boolean)||null;},
  actor(){return [...document.querySelectorAll('[role="banner"] a[href],nav a[href],[role="navigation"] a[href]')].filter(e=>this.visible(e)&&(/^(Your profile|Profile|Account)$/i.test(e.getAttribute('aria-label')||'')||e.querySelector('img[alt="Your profile"],img[alt="Your profile picture"]'))).map(e=>S.profileURL(e.href)).find(Boolean)||null;},
- reactionButton(root){const arr=this.ownControls(root).filter(e=>/^(Like|Love|Care|Haha|Wow|Sad|Angry|Remove (?:Like|Love|Care|Haha|Wow|Sad|Angry))$/.test(this.text(e)));return arr.length===1?arr[0]:null;},
+ reactionButton(root){const arr=this.ownControls(root).filter(e=>/^(Like|Love|Care|Haha|Wow|Sad|Angry|(?:Remove |Change |You reacted with )(?:Like|Love|Care|Haha|Wow|Sad|Angry)(?: reaction)?)$/.test(this.text(e))||this.selectedReaction(e));return arr.length===1?arr[0]:null;},
  reactionName(e){
   const names=['Like','Love','Care','Haha','Wow','Sad','Angry'];
-  const values=[e.getAttribute('aria-label'),e.getAttribute('title'),e.getAttribute('data-reaction'),e.getAttribute('data-reaction-type'),e.textContent,...[...e.querySelectorAll('[aria-label],[title],img[alt]')].flatMap(n=>[n.getAttribute('aria-label'),n.getAttribute('title'),n.getAttribute('alt')])];
+  const values=[e.getAttribute('alt'),e.getAttribute('aria-label'),e.getAttribute('title'),e.getAttribute('data-reaction'),e.getAttribute('data-reaction-type'),e.textContent,...[...e.querySelectorAll('[aria-label],[title],img[alt]')].flatMap(n=>[n.getAttribute('aria-label'),n.getAttribute('title'),n.getAttribute('alt')])];
   for(const value of values){const text=String(value||'').trim();const name=names.find(n=>new RegExp('^(?:React with |Remove )?'+n+'(?: reaction)?$','i').test(text));if(name)return name;}
   return null;
  },
@@ -67,6 +67,22 @@ const D=globalThis.AuroraDOM={
   target.dispatchEvent(new PointerEvent('pointerover',{...common,pointerType:'mouse',pointerId:1,isPrimary:true}));
   target.dispatchEvent(new PointerEvent('pointerenter',{...common,pointerType:'mouse',pointerId:1,isPrimary:true}));
   target.dispatchEvent(new MouseEvent('mouseover',common));target.dispatchEvent(new MouseEvent('mouseenter',common));
+ },
+ press(element){
+  const r=element.getBoundingClientRect(),clientX=r.left+r.width/2,clientY=r.top+r.height/2;
+  const hit=document.elementFromPoint(clientX,clientY);const target=hit&&element.contains(hit)?hit:element;
+  // Exactly one click; pointer down/up are deliberately not sent (they can trigger another press).
+  target.dispatchEvent(new PointerEvent('click',{bubbles:true,cancelable:true,composed:true,view:window,clientX,clientY,button:0,buttons:0,detail:1,pointerType:'mouse',pointerId:1,isPrimary:true}));
+ },
+ selectedReaction(button){
+  if(!button)return null;
+  const names=['Like','Love','Care','Haha','Wow','Sad','Angry'];
+  const label=this.text(button);
+  for(const name of names)if(new RegExp('^(?:Remove |Change |You reacted with )?'+name+'(?: reaction)?$','i').test(label)&&(name!=='Like'||button.getAttribute('aria-pressed')==='true'||/^Remove |^Change |^You reacted with /i.test(label)))return name;
+  // Selected reaction graphics may be labelled while the outer control retains “Like”.
+  const icons=[...button.querySelectorAll('img[alt],svg[aria-label],i[aria-label],[data-reaction]')].map(e=>this.reactionName(e)).filter(Boolean);
+  const unique=[...new Set(icons)];if(unique.length===1&&(unique[0]!=='Like'||button.getAttribute('aria-pressed')==='true'))return unique[0];
+  return null;
  },
  reactionPalette(target){
   const canonical=['Like','Love','Care','Haha','Wow','Sad','Angry'];
@@ -91,7 +107,7 @@ const D=globalThis.AuroraDOM={
   const i=['Like','Love','Care','Haha','Wow','Sad','Angry'].indexOf(name);if(i<0)return null;
   return {element:palette.items[i],method:'native palette label'};
  },
- reacted(button){if(!button)return null;if(button.getAttribute('aria-pressed')==='true'||/^Remove |^(Love|Care|Haha|Wow|Sad|Angry)$/.test(this.text(button)))return true;if(button.getAttribute('aria-pressed')==='false'||this.text(button)==='Like')return false;return null;},
+ reacted(button){if(!button)return null;if(this.selectedReaction(button))return true;if(button.getAttribute('aria-pressed')==='true'||/^Remove |^(Love|Care|Haha|Wow|Sad|Angry)$/.test(this.text(button)))return true;if(button.getAttribute('aria-pressed')==='false'||this.text(button)==='Like')return false;return null;},
  commentRows(root){return [...root.querySelectorAll('[role="article"]')].filter(e=>e!==root&&this.visible(e));},
  field(root){const arr=[...root.querySelectorAll('textarea,[contenteditable="true"][role="textbox"],div[contenteditable="true"][aria-label]')].filter(e=>this.visible(e)&&/comment/i.test(e.getAttribute('aria-label')||e.getAttribute('placeholder')||''));return arr.length===1?arr[0]:null;},
  fieldText(f){return 'value'in f?f.value:f.innerText;},
