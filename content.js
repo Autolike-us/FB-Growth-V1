@@ -92,7 +92,8 @@ async function likePost(root,key,s,c,id){
   for(let t=0;t<14&&!point;t++){await active(id);if(c.reaction!=='Like'){const ch=D.reactionChoice(c.reaction,target);if(ch)pick=ch.element;}point=D.point(pick)||(c.reaction!=='Like'?D.pointByReaction(pick,c.reaction):null);if(!point){if(t===6&&c.reaction!=='Like')D.hover(target);await wait(250);}}
   if(!point)throw Object.assign(Error('The reaction choice is covered or outside the visible post. No click sent.'),{noClick:true});if(c.reaction==='Like'){pick.click();return;}const result=await chrome.runtime.sendMessage({action:'nativeReactionClick',jobId:id,url:s.url,reaction:c.reaction,x:point.x,y:point.y});if(!result?.ok)throw Object.assign(Error(result?.error||'Native reaction input returned no result.'),{noClick:result?.noClick===true});},()=>{const scope=root()||(confirmationScope?.isConnected?confirmationScope:null);const b=(target.isConnected&&D.selectedReaction(target)?target:null)||D.reactionButton(scope);const selected=D.selectedReaction(b);if(selected)T('selected reaction',selected);return selected===c.reaction;},'Reacted '+c.reaction+' to post.');
 }
-async function commentPost(root,key,c,id){
+async function commentPost(root0,key,c,id){
+ const root=()=>D.viewerRoot()||root0()||null;
  let field=D.field(root());
  const opener=()=>D.ownControls(root()).filter(e=>/^(Comment|Comments|Comment on this post|Leave a comment|Write a comment)/i.test(D.text(e)))[0]||null;
  if(!field){
@@ -153,7 +154,7 @@ if(c.action==='share')return sharePost(root,key,c,id);throw Error('Unsupported p
 // Feed mode: work down the page the way a person does. Take the first post not handled yet, react/comment in place, then scroll on.
 const feedIgnored=new Set();
 async function closeDialogs(id,s){
- for(let n=0;n<3;n++){const d=D.dialogs().find(x=>D.button(x,'Close'));if(!d)break;await active(id);D.button(d,'Close').click();await wait(600);}
+ for(let n=0;n<3;n++){const d=D.dialogs().find(x=>D.button(x,'Close'));const v=d?null:D.closeViewer();if(!d&&!v)break;await active(id);(d?D.button(d,'Close'):v).click();await wait(600);}
  // A post dialog can change the address bar; step back so the feed (and its scroll position) is still there for the next post.
  if(s&&S.pageKey(location.href)!==S.pageKey(s.url)){history.back();await wait(1200);}
 }

@@ -116,5 +116,9 @@ Unfollow now handles Facebook's "Follow settings" dialog: it picks the Unfollow 
 - **Popup:** only the page scrolls (no inner scrollbars, no sideways scrollbar); the Start bar no longer sits 21px off the edge.
 - **Aurora panel on Facebook:** matches the studio (follows light/dark), shows a PREVIEW or LIVE badge, and shows only the controls that apply — the preview form when idle; Pause and Stop while running; Resume, **Skip this target**, Stop and Copy error report when paused — with "Target 2 of 5 · name · next in 24s" and a progress bar.
 
+## Version 2.0.28: commenting on hashtag pages
+
+Clicking *Leave a comment* can open a post viewer that is not a `role=dialog`, which used to crash the comment step (`querySelector` of undefined). Aurora now finds the opened viewer by its comment editor and Close button, accepts the *Post comment* send button, and closes the viewer afterwards.
+
 ## Version 2.0.26: no sticky Start bar
 Nothing is pinned to the window any more: in both the full studio and the popup, Start/Save are ordinary form content, with the one-line summary just above them.
