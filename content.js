@@ -57,36 +57,35 @@ async function closeDialogs(id){for(let n=0;n<3;n++){const d=D.dialogs().find(x=
 async function feed(s,c,id,seen){D.lenient=true;try{return await feedRun(s,c,id,seen);}finally{D.lenient=false;}}
 async function feedRun(s,c,id,seen){
  await closeDialogs(id);
- if(!await until(()=>D.feedArticles().length,id,12000))throw Error('No posts appeared. Load an accessible page/group/hashtag and resume.');
- let idle=0,ignored=0;
- for(let i=0;i<60;i++){
+ if(!await until(()=>D.feedRows().length,id,12000))throw Error('No posts appeared (no Like/Comment/Share bars found). '+D.probe());
+ let idle=0,sawRows=false;
+ for(let i=0;i<80;i++){
   await active(id);
-  const article=D.feedArticles().find(a=>{const k=D.articleKey(a);return k&&!seen.has(k)&&!feedIgnored.has(k);});
-  if(!article){
-   const mark=document.querySelectorAll('[role="article"]').length+':'+Math.round(scrollY)+':'+D.feedArticles().length;
-   D.scrollFeed(document);await wait(1500);
-   idle=mark===document.querySelectorAll('[role="article"]').length+':'+Math.round(scrollY)+':'+D.feedArticles().length?idle+1:0;
-   if(idle>=4)return{end:true,message:'End of feed: no more new posts here.'};
+  const rows=D.feedRows();if(rows.length)sawRows=true;
+  const o=rows.find(r=>{const k=D.rowKey(r);return !seen.has(k)&&!feedIgnored.has(k);});
+  if(!o){
+   D.scrollFeed(document.body);await wait(1500);
+   idle=D.feedRows().some(r=>{const k=D.rowKey(r);return !seen.has(k)&&!feedIgnored.has(k);})?0:idle+1;
+   if(idle>=4){if(!sawRows)throw Error('No posts appeared. '+D.probe());return{end:true,message:'End of feed: no more new posts here.'};}
    continue;
   }
   idle=0;
-  const key=D.articleKey(article),find=()=>D.feedArticles().find(a=>D.articleKey(a)===key)||null;
-  article.scrollIntoView({block:'start',behavior:'instant'});await wait(500);
-  const bar=await until(()=>{const a=find();return a&&D.reactionButton(a);},id,2500);
-  if(!bar){feedIgnored.add(key);ignored++;const what=D.describeControls(find()||article);T('No Like button in block',key,what);if(ignored>=4)throw Error('Could not find a Like button on the posts. Controls seen in the last block: '+(what||'none')+'.');continue;}
-  const url=[...find().querySelectorAll('a[href]')].map(a=>S.postURL(a.href)).find(Boolean)||s.url;
-  const author=D.author(find());
+  const key=D.rowKey(o),find=()=>D.feedRows().find(r=>D.rowKey(r)===key)||null;
+  o.row.scrollIntoView({block:'center',behavior:'instant'});await wait(600);
+  const cur=find();if(!cur){feedIgnored.add(key);continue;}
+  const url=[...cur.box.querySelectorAll('a[href]')].map(a=>S.postURL(a.href)).find(Boolean)||s.url;
+  const author=D.author(cur.box);
   if(author&&AuroraEngine.excluded(author,'',c))return{key,url,message:'Skipped: excluded post author.'};
   const who=D.actor()||'browser',pk=S.pageKey(url)===S.pageKey(s.url)?key:S.pageKey(url);
-  const dlgRoot=()=>D.dialogs().find(d=>D.field(d))||find();
-  const root=c.action==='comment'?dlgRoot:find;
   T('Feed post',key);
   let r;
-  try{r=c.action==='like'?await likePost(root,who+':like:'+pk+':'+c.reaction,s,c,id):await commentPost(root,who+':comment:'+pk,c,id);}
-  finally{if(c.action==='comment')await closeDialogs(id);}
+  try{
+   if(c.action==='like')r=await likePost(()=>find()?.row,who+':like:'+pk+':'+c.reaction,s,c,id);
+   else r=await commentPost(()=>D.dialogs().find(d=>D.field(d))||find()?.box,who+':comment:'+pk,c,id);
+  }finally{if(c.action==='comment')await closeDialogs(id);}
   return{...r,key,url};
  }
- return{end:true,message:'Stopped after scrolling 60 times without finishing this feed.'};
+ return{end:true,message:'Stopped after scrolling 80 times without finishing this feed.'};
 }
 async function step(s,c,id,seen=[]){await active(id);if(S.pageKey(location.href)!==S.pageKey(s.url))throw Error('Facebook changed targets. Nothing submitted.');T('Step',s.kind,c.action);if(s.kind==='feed')return feed(s,c,id,new Set(seen));if(s.kind==='posts')return collectPosts(s,c,id);if(s.kind==='account')return account(s,c,id);if(s.kind==='engage')return engage(s,c,id);throw Error('Unknown task step.');}
 globalThis.AuroraDiagnose=()=>{const root=D.postRoot(location.href),mark=x=>x?'✓':'✗';return['Aurora Facebook page check','English interface: '+mark(/^en/.test(document.documentElement.lang)),'Page container: '+mark(D.scope()),'Profile/group header: '+mark(D.header()?.querySelector('h1,[role="heading"]')),'Unique post container: '+mark(root),'Article elements: '+document.querySelectorAll('[role="article"]').length,'Main containers: '+document.querySelectorAll('[role="main"],main').length,'Discoverable feed posts: '+D.feedPosts().length,'Recognized post links: '+[...document.querySelectorAll('a[href]')].filter(a=>S.postURL(a.href)).length,'Post reaction control: '+mark(root&&D.reactionButton(root)),'Reaction layout: '+JSON.stringify(D.controlLayout(root&&D.reactionButton(root))),'Selected reaction: '+(root&&D.selectedReaction(D.reactionButton(root))||'not identifiable'),'Comment editor: '+mark(root&&D.field(root)),'Visible dialogs: '+D.dialogs().length,'Warning: '+(D.warning()||'none')].join('\n');};

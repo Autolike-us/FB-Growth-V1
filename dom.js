@@ -68,6 +68,35 @@ const D=globalThis.AuroraDOM={
   }
   return root;
  },
+ // Feed mode: locate posts by their action bar (Like + Comment/Share), not by role="article", which Facebook does not reliably set.
+ feedRows(){
+  const blocked='[role="dialog"],[role="alertdialog"],[data-pagelet*="Cover" i],[data-pagelet*="ProfileHeader" i],[aria-label*="Comment by" i],[aria-label*="Reply by" i],[data-testid*="comment" i]';
+  const commentish=t=>/^(Comment|Comments|Leave a comment|Comment on this post|Write a comment)/i.test(t),shareish=t=>/^(Share|Share this post|Send this to friends)/i.test(t);
+  const out=[];
+  for(const like of this.controls(document.body).filter(e=>this.reactionControl(e)&&!e.closest(blocked))){
+   for(let n=like.parentElement,depth=0;n&&n!==document.body&&depth<8;n=n.parentElement,depth++){
+    const own=this.ownControls(n);
+    if(own.filter(e=>this.reactionControl(e)).length!==1)break;
+    const labels=own.map(e=>this.text(e));
+    if(labels.some(commentish)||labels.some(shareish)||this.field(n)){
+     let box=n;for(let p=n.parentElement,i=0;p&&p!==document.body&&i<12;p=p.parentElement,i++){if(p.matches('[role="feed"],[role="main"],main'))break;box=p;if(p.matches('[role="article"]'))break;}
+     if(!out.some(o=>o.row===n))out.push({row:n,box,like});
+     break;
+    }
+   }
+  }
+  // Drop rows whose box swallowed another row (box climbed too far): shrink it back to the row.
+  for(const o of out)if(out.some(x=>x!==o&&o.box.contains(x.row)))o.box=o.row;
+  return out.filter(o=>this.visible(o.row)).sort((a,b)=>a.row.getBoundingClientRect().top-b.row.getBoundingClientRect().top);
+ },
+ rowKey(o){
+  if(this.keys?.has(o.row))return this.keys.get(o.row);
+  const link=[...o.box.querySelectorAll('a[href]')].filter(l=>!l.closest('[aria-label*="Comment by" i],[data-testid*="comment" i]')).map(l=>S.postURL(l.href)).find(Boolean);
+  let key=link?S.pageKey(link):null;
+  if(!key){const t=String(o.box.innerText||'').replace(/\s+/g,' ').trim().slice(0,160);if(t.length>=20){let h=0;for(const ch of t)h=(h*31+ch.codePointAt(0))|0;key='txt:'+h;}else key='pos:'+Math.round(scrollY+o.row.getBoundingClientRect().top);}
+  (this.keys??=new WeakMap).set(o.row,key);return key;
+ },
+ probe(){const seen=new Set(),out=[];for(const e of document.querySelectorAll('[aria-label],button,[role="button"]')){if(!this.visible(e))continue;const t=this.text(e).slice(0,40);if(/like|comment|share|react|send/i.test(t)&&!seen.has(t)){seen.add(t);out.push(t);}}return 'articles='+document.querySelectorAll('[role="article"]').length+'; controls: '+(out.slice(0,16).join(' | ')||'none');},
  feedArticles(){return [...document.querySelectorAll('[role="article"]')].filter(e=>this.visible(e)&&!e.parentElement?.closest('[role="article"]')&&!e.closest('[role="dialog"],[role="alertdialog"],[data-pagelet*="Cover" i],[data-pagelet*="ProfileHeader" i]')&&!e.matches('[aria-label*="Comment by" i],[aria-label*="Reply by" i]')).sort((a,b)=>a.getBoundingClientRect().top-b.getBoundingClientRect().top);},
  articleKey(a){
   if(this.keys?.has(a))return this.keys.get(a);
@@ -95,7 +124,7 @@ const D=globalThis.AuroraDOM={
  // Feed mode only: Facebook's feed markup varies, so accept any labelled Like control in the post's own action row.
  looseLike(a){
   const names=/^(Like|Love|Care|Haha|Wow|Sad|Angry|(?:Remove |Change |You reacted with )(?:Like|Love|Care|Haha|Wow|Sad|Angry)(?: reaction)?)$/;
-  const own=[...a.querySelectorAll('[role="button"],button,[aria-label],[tabindex="0"]')].filter(e=>this.visible(e)&&e.getAttribute('aria-disabled')!=='true'&&!e.closest('[aria-label*="Comment by" i],[aria-label*="Reply by" i],[data-testid*="comment" i]')&&e.closest('[role="article"]')===a);
+  const own=[...a.querySelectorAll('[role="button"],button,[aria-label],[tabindex="0"]')].filter(e=>this.visible(e)&&e.getAttribute('aria-disabled')!=='true'&&!e.closest('[aria-label*="Comment by" i],[aria-label*="Reply by" i],[data-testid*="comment" i]')&&(()=>{const ar=e.closest('[role="article"]');return !ar||ar===a||!a.contains(ar);})());
   const hits=own.filter(e=>names.test(this.text(e))||this.selectedReaction(e)),outer=hits.filter(e=>!hits.some(o=>o!==e&&e.contains(o)));
   const row=outer.filter(e=>{for(let p=e.parentElement;p&&p!==a;p=p.parentElement){const t=[...p.querySelectorAll('[role="button"],button,[aria-label]')].map(x=>this.text(x));if(t.some(x=>/^Comment/.test(x))&&t.some(x=>/^(Share|Send)/.test(x)))return true;}return false;});
   return (row.length?row:outer)[0]||null;
