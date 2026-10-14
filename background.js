@@ -95,6 +95,8 @@ async function tick(){
   let more=[];
   if(step.kind==='feed'){
    // perUser counts posts actually reacted to/commented on; already-handled posts are skipped without using up the quota (bounded by a generous look-at cap).
+   // A post that could not be handled is skipped; three in a row means something systematic, so pause with the reason instead of grinding on.
+   if(r.failed){job.failStreak=(job.failStreak||0)+1;if(job.failStreak>=3)throw Error('Three posts in a row could not be handled. Last reason: '+String(r.message||'').replace(/^Skipped: /,''));}else if(r.key)job.failStreak=0;
    if(r.key)(job.seen??=[]).push(r.key);if(r.key)step.examined=(step.examined||0)+1;if(r.performed||r.preview)step.count=(step.count||0)+1;
    if(r.end||(step.count||0)>=job.config.perUser||(step.examined||0)>=job.config.perUser*10+20)job.queue.shift();}
   else{job.queue.shift();more=AuroraEngine.expand(job,step,r);job.queue.unshift(...more);}

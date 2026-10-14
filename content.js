@@ -30,7 +30,27 @@ if(c.action==='unfollow'){
  },()=>button('Follow'),'Unfollowed '+s.label+'.');
 }
 if(c.action==='friend'){const sent=/^(Friends|Cancel request|Friend request sent|Request sent)\b/i,add=/^Add friend\b/i;if(D.headerMatch(sent))return{message:'Skipped: already friends or requested.'};const target=D.headerMatch(add);if(!target)return{message:'Skipped: friend requests are unavailable for this profile.'};if(c.dry)return{preview:true,message:'Preview: send a friend request to '+s.label+'. No change made.'};return perform(key,id,()=>{D.reveal(target);target.click();},()=>D.headerMatch(sent),'Sent a friend request to '+s.label+'.');}
-if(c.action==='join'){if(button('Joined','Leave group','Member'))return{message:'Skipped: already a member.'};if(button('Cancel request','Cancel Request','Request sent'))return{message:'Skipped: a membership request is pending.'};const target=button('Join group','Join Group');if(!target)throw Error('Join group control unavailable.');if(c.dry)return{preview:true,message:'Preview: join/request membership in '+s.label+'. No change made.'};return perform(key,id,async()=>{target.click();const outcome=await until(()=>button('Joined','Member','Cancel request','Cancel Request','Request sent')||D.dialogs().find(d=>/membership questions|answer.*questions|group rules|agree to/i.test(d.innerText)),id,5000);if(outcome?.getAttribute?.('role')==='dialog')throw Error('Group requires membership questions or rules. Complete them manually; Aurora will not answer or agree for you.');},()=>button('Joined','Member','Cancel request','Cancel Request','Request sent'),'Joined/requested membership in '+s.label+'.');}throw Error('Unsupported account action.');}
+if(c.action==='join'){
+ if(D.headerMatch(/^(Joined|Leave group|Member)\b/i))return{message:'Skipped: already a member.'};
+ if(D.headerMatch(/^(Cancel request|Request sent)\b/i))return{message:'Skipped: a membership request is pending.'};
+ const target=D.headerMatch(/^Join( group)?$/i);if(!target)throw Error('Join group control unavailable.');
+ if(c.dry)return{preview:true,message:'Preview: join/request membership in '+s.label+'. No change made.'};
+ const done=()=>D.headerMatch(/^(Joined|Member|Cancel request|Request sent)\b/i);
+ const form=d=>/membership questions|answer.*questions|group rules|agree to|rules of|before you join/i.test(d.innerText||'');
+ // Some groups open a questions/rules dialog. Aurora never answers or agrees for you: close it and move on to the next group.
+ const closeForm=async d=>{for(let n=0;n<3&&D.dialogs().length;n++){const x=D.dialogs().map(p=>D.button(p,'Close','Cancel','Not now','Back')).find(Boolean);if(x){await active(id);x.click();}else document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',code:'Escape',keyCode:27,which:27,bubbles:true}));await wait(600);}};
+ try{
+  return await perform(key,id,async()=>{
+   D.reveal(target);await wait(400);target.click();
+   const outcome=await until(()=>done()||D.dialogs().find(form),id,6000);
+   if(outcome&&outcome.nodeType===1&&outcome.getAttribute('role')==='dialog'){await closeForm(outcome);throw Object.assign(Error('SKIP: needs membership questions or rules, which Aurora never answers. Closed it.'),{noClick:true});}
+  },done,'Joined/requested membership in '+s.label+'.');
+ }catch(e){
+  if(/^SKIP:/.test(e.message))return{message:'Skipped: '+e.message.slice(6)};
+  throw e;
+ }
+}
+throw Error('Unsupported account action.');}
 async function likePost(root,key,s,c,id){
  let target=await until(()=>D.reactionButton(root()),id,4000);if(!target)throw Error('Cannot identify a unique post reaction control. Use Check page.');
  if(D.reacted(target))return{message:'Skipped: post already has your reaction.'};if(D.reacted(target)!==false)throw Error('Cannot read the post reaction state. No click sent.');
@@ -99,15 +119,31 @@ async function sharePost(root,key,c,id){
  const shares=D.ownControls(root()).filter(e=>/^(Share|Share this post|Share reel|Share, send this to friends|Send this to friends)/i.test(D.text(e)));
  if(!shares.length)return{message:'Skipped: no Share control on this post.'};
  if(c.dry)return{preview:true,message:'Preview: share target post to your feed using Facebook’s current audience. No change made.'};
- const menus=()=>[...D.dialogs(),...document.querySelectorAll('[role="menu"]')].filter(e=>D.visible(e)&&/share/i.test(e.innerText||''));
- const feedButton=m=>D.controls(m).find(e=>/^(Share now|Share to Feed|Share to your feed)/i.test(D.text(e)))||D.button(m,'Share');
+ const ITEM='button,[role="button"],[role="menuitem"],[role="menuitemradio"],[role="option"],[role="radio"],a[role="link"],[role="listitem"] [tabindex="0"]';
+ const menus=()=>[...D.dialogs(),...document.querySelectorAll('[role="menu"],[role="listbox"]')].filter(e=>D.visible(e)&&/share/i.test(e.innerText||''));
+ const items=m=>[...m.querySelectorAll(ITEM)].filter(e=>D.visible(e)&&e.getAttribute('aria-disabled')!=='true');
+ const label=e=>D.text(e);
+ // Preferred: an immediate "Share now" to your feed. Next: "Share to Feed", which opens a composer with its own Share now/Post button.
+ const immediate=m=>items(m).find(e=>/^Share now\b/i.test(label(e)));
+ const toFeed=m=>items(m).find(e=>/^Share to (your )?(Feed|profile)\b/i.test(label(e)));
+ const composerSubmit=m=>items(m).find(e=>/^(Share now|Post|Share)$/i.test(label(e)));
  return perform(key,id,async()=>{
   D.reveal(shares[0]);await wait(500);shares[0].click();
-  const menu=await until(()=>menus()[0],id,6000);if(!menu)throw Error('Share dialog unavailable. Nothing automatically submitted.');
-  if(/Share to a group|Send in Messenger/.test(menu.querySelector('h1,h2,[role="heading"]')?.textContent||''))throw Error('Unexpected share destination. Review it manually.');
-  const send=feedButton(menu);if(!send)throw Error('Feed share submit button unavailable. Review Facebook manually.');
-  await wait(500+Math.random()*700);await active(id);send.click();
- },()=>[...document.querySelectorAll('[role="alert"],[role="status"]')].some(e=>D.visible(e)&&/post (?:was )?shared|shared to your|shared successfully|shared/i.test(e.innerText))||!menus().length,'Shared post to your feed.');
+  const menu=await until(()=>menus().find(m=>immediate(m)||toFeed(m)||composerSubmit(m))||menus()[0],id,6000);
+  if(!menu)throw Object.assign(Error('Share menu did not open. Nothing was shared.'),{noClick:true});
+  if(/Share to a group|Send in Messenger/.test(menu.querySelector('h1,h2,[role="heading"]')?.textContent||'')&&!immediate(menu)&&!toFeed(menu))throw Object.assign(Error('Unexpected share destination. Review it manually.'),{noClick:true});
+  let pick=immediate(menu),second=false;
+  if(!pick){pick=toFeed(menu);second=!!pick;}
+  if(!pick)pick=composerSubmit(menu);
+  if(!pick)throw Object.assign(Error('Feed share button not found. Share menu options seen: '+(items(menu).map(label).filter(Boolean).slice(0,12).join(' | ')||'none')+'. Nothing was shared.'),{noClick:true});
+  T('Share option',label(pick));
+  await wait(500+Math.random()*700);await active(id);pick.click();
+  if(second){
+   const composer=await until(()=>menus().map(composerSubmit).find(Boolean)||D.dialogs().map(composerSubmit).find(Boolean),id,6000);
+   if(!composer)throw Error('Share composer did not show a Share now/Post button. Check Facebook manually.');
+   await wait(600+Math.random()*700);await active(id);composer.click();
+  }
+ },()=>[...document.querySelectorAll('[role="alert"],[role="status"]')].some(e=>D.visible(e)&&/shared/i.test(e.innerText))||!menus().length,'Shared post to your feed.');
 }
 async function engage(s,c,id){const root=()=>D.postRoot(s.url);if(!await until(root,id,12000))throw Error('Post content did not render as a unique target. No action sent.');const author=D.author(root());if(author&&AuroraEngine.excluded(author,'',c))return{message:'Skipped: excluded post author.'};const who=D.actor()||'browser',key=who+':'+c.action+':'+S.pageKey(s.url)+(c.action==='like'?':'+c.reaction:'');
 if(c.action==='like')return likePost(root,key,s,c,id);
@@ -151,7 +187,7 @@ async function feedRun(s,c,id,seen){
    else r=await commentPost(()=>D.dialogs().find(d=>D.field(d))||find()?.box,who+':comment:'+pk,c,id);
   }catch(e){
    // Errors that guarantee no click was sent (or an unconfirmed one) skip this post instead of pausing the whole task.
-   if(/No click sent|No reaction click was sent/.test(e.message))return{key,url,message:'Skipped: '+e.message};
+   if(e.noClick===true||/No click sent|No reaction click was sent/.test(e.message))return{key,url,failed:true,message:'Skipped: '+e.message};
    if(/outcome is unknown/.test(e.message)){
     // The action was sent, so count it (never exceed your limit) and say plainly that it was not confirmed.
     if(c.action==='comment')return{key,url,performed:true,message:'Comment sent but could not confirm it appeared. Check this post on Facebook.'};

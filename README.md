@@ -97,3 +97,8 @@ Comment and Share now use the same in-feed walk as reactions. For each post Auro
 
 ## Version 2.0.16: unfollow via Follow settings, page IDs
 Unfollow now handles Facebook's "Follow settings" dialog: it picks the Unfollow radio and presses Update (the older menu is still supported). Pages can be targeted by a bare numeric ID or a `profile.php?id=…` link; if Facebook redirects the ID to the page's username, Aurora continues on the redirected page instead of stopping.
+
+## Version 2.0.17: join dialogs, share menu, cleaner studio
+- **Join:** if Facebook shows a membership-questions or rules dialog, Aurora closes it without answering and moves to the next group (it is logged as skipped, and a later run can still try that group).
+- **Share:** the Share menu is read as a menu (not only buttons). Aurora picks "Share now", or "Share to Feed" followed by the composer's Share now/Post button; if neither exists it reports the options it saw. A post that cannot be handled is skipped; three in a row pause the task with the reason.
+- **Studio:** fields that do not apply to the chosen action are hidden (follow/unfollow/friend/join hide "posts per target" and the source picker; only React shows the reaction list; only Comment shows the comment box). A banner always says PREVIEW MODE (nothing is sent) or LIVE MODE, the start button reads "Start preview" or "Start live task", and finished preview runs say that nothing was sent.
