@@ -1,1 +1,13 @@
-{"name":"aurora-studio","version":"1.0.0","private":true,"scripts":{"test":"node --test tests/"}}
+{
+  "name": "aurora-facebook-studio",
+  "version": "2.0.6",
+  "private": true,
+  "scripts": {
+    "test": "node tests/planning.test.cjs && node tests/worker.test.cjs",
+    "test:browser": "node tests/browser.test.cjs",
+    "package": "node scripts/package.cjs"
+  },
+  "devDependencies": {
+    "playwright": "1.62.1"
+  }
+}

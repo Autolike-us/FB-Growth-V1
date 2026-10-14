@@ -1,14 +1,16 @@
 {
   "manifest_version": 3,
-  "name": "Aurora • Studio",
-  "version": "1.0.0",
-  "description": "Personal engagement studio, preview edition: visits your pages and reports what a task would do. It never clicks, reacts, comments, follows, joins or shares.",
+  "name": "Aurora \u2022 Facebook Studio",
+  "version": "2.0.6",
+  "description": "Personal Facebook post discovery, reactions, follows, comments, friend requests, group joins and shares with preview and local history.",
   "permissions": [
     "storage",
     "alarms",
     "unlimitedStorage",
     "tabs",
-    "notifications"
+    "notifications",
+    "scripting",
+    "debugger"
   ],
   "host_permissions": [
     "https://www.facebook.com/*"
@@ -32,6 +34,9 @@
         "https://www.facebook.com/*"
       ],
       "js": [
+        "selectors.js",
+        "engine.js",
+        "dom.js",
         "report.js",
         "content.js",
         "panel.js"
@@ -44,5 +49,6 @@
     "32": "icons/icon32.png",
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
-  }
+  },
+  "minimum_chrome_version": "110"
 }
