@@ -2,7 +2,7 @@ importScripts('selectors.js','engine.js');
 const base='https://www.facebook.com/';
 let busy=false;
 // Errors raised before any click is sent; safe to retry while Facebook finishes rendering.
-const RETRYABLE=/did not render this page|No posts appeared|Post content did not render/;
+const RETRYABLE=/did not render this page|No posts appeared|Post content did not render|reaction control is covered/;
 // Pauses that need a person (not a one-click Resume).
 const NEEDS_HUMAN=/captcha|verify|verification|restricted|Sign in|Daily cap|interrupted|restarted|unknown/i;
 const HISTORY_MAX=5000,RECEIPT_MAX_AGE=90*864e5,LOG_MAX=1500;
@@ -60,7 +60,7 @@ async function sendStep(job,step){
  catch(err){
   await dlog('warn','Page script not reachable, re-attaching it',String(err?.message||err));
   try{await chrome.scripting.executeScript({target:{tabId:job.tabId},files:['selectors.js','engine.js','dom.js','content.js']});return await chrome.tabs.sendMessage(job.tabId,msg);}
-  catch(err2){throw Error('Facebook content script is unavailable. Refresh the task tab and resume.'+(err2?.message?' ('+String(err2.message).slice(0,120)+')':''));}
+  catch(err2){throw Object.assign(Error('Facebook content script is unavailable. Refresh the task tab and resume.'+(err2?.message?' ('+String(err2.message).slice(0,120)+')':'')),{noSend:true});}
  }
 }
 async function tick(){
@@ -83,10 +83,10 @@ async function tick(){
   job.navigation=null;job.message='Reading Facebook: '+step.kind;await save(job);
   if(action){job.inFlight=true;await save(job);}
   await dlog('info',`Step ${step.kind} ${short(step.url)}${job.config.dry?' [preview]':''}`);
-  const r=await sendStep(job,step);
+  let r;try{r=await sendStep(job,step);}catch(e){if(e.noSend){job.inFlight=false;await save(job);}throw e;}
   const latest=(await chrome.storage.local.get('job')).job;if(latest?.id!==job.id)return;const interrupted=latest.status!=='running';if(interrupted)job.status=latest.status;
   job.inFlight=false;await save(job);
-  if(r?.error&&RETRYABLE.test(r.error)&&(job.retries||0)<3){job.retries=(job.retries||0)+1;job.message=`Facebook was still loading (${r.error}) Retrying ${job.retries}/3…`;job.nextAt=Date.now()+8000;await save(job);await dlog('warn',`Retry ${job.retries}/3 after: ${r.error}`,ctx(r));await schedule(job);return;}
+  if(r?.error&&RETRYABLE.test(r.error)&&(job.retries||0)<3){job.retries=(job.retries||0)+1;job.message=`Facebook was still loading (${r.error}). Retrying ${job.retries}/3…`;job.nextAt=Date.now()+8000;await save(job);await dlog('warn',`Retry ${job.retries}/3 after: ${r.error}`,ctx(r));await schedule(job);return;}
   if(r?.error){await dlog('error','Step failed: '+r.error,ctx(r));throw Error(r.error);}if(!r)throw Error('Facebook returned no result.');
   job.retries=0;
   if(r.wait){job.message=r.wait;job.nextAt=Date.now()+3000;await save(job);await schedule(job);return;}
@@ -98,7 +98,7 @@ async function tick(){
   if(interrupted){job.message=latest.message+' Last result: '+job.message;await save(job);return;}
   if(!job.queue.length||(job.done||0)>=job.config.limit){await finish(job);return;}
   job.nextAt=Date.now()+gap;await save(job);await schedule(job);
- }catch(e){const {job}=await chrome.storage.local.get('job');if(job?.status==='running'){job.status='paused';job.message=e.message;job.waitingCaptcha=false;await save(job);await chrome.alarms.clear('step');await log(e.message);if(job.waitingCaptcha)await focusTab(job);await dlog('error','Paused: '+e.message,String(e.stack||'').split('\n').slice(0,4).join('\n'));await notify('Aurora paused — needs you',e.message+(NEEDS_HUMAN.test(e.message)?' Open Aurora to review.':' Press Resume to continue.'),{resume:!NEEDS_HUMAN.test(e.message)});}}
+ }catch(e){const {job}=await chrome.storage.local.get('job');if(job?.status==='running'){job.status='paused';job.message=e.message;job.waitingCaptcha=false;await save(job);await chrome.alarms.clear('step');await log(e.message);if(/captcha|verification|restriction/i.test(e.message))await focusTab(job);await dlog('error','Paused: '+e.message,String(e.stack||'').split('\n').slice(0,4).join('\n'));await notify('Aurora paused — needs you',e.message+(NEEDS_HUMAN.test(e.message)?' Open Aurora to review.':' Press Resume to continue.'),{resume:!NEEDS_HUMAN.test(e.message)});}}
  finally{busy=false;}
 }
 chrome.alarms.onAlarm.addListener(a=>{if(a.name==='step')tick();});
