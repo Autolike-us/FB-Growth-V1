@@ -68,6 +68,14 @@ const D=globalThis.AuroraDOM={
   }
   return root;
  },
+ feedArticles(){return [...document.querySelectorAll('[role="article"]')].filter(e=>this.visible(e)&&!e.parentElement?.closest('[role="article"]')&&!e.closest('[role="dialog"],[role="alertdialog"],[data-pagelet*="Cover" i],[data-pagelet*="ProfileHeader" i]')&&!e.matches('[aria-label*="Comment by" i],[aria-label*="Reply by" i]')).sort((a,b)=>a.getBoundingClientRect().top-b.getBoundingClientRect().top);},
+ articleKey(a){
+  if(this.keys?.has(a))return this.keys.get(a);
+  const link=[...a.querySelectorAll('a[href]')].filter(l=>!l.closest('[aria-label*="Comment by" i],[data-testid*="comment" i]')).map(l=>S.postURL(l.href)).find(Boolean);
+  let key=link?S.pageKey(link):null;
+  if(!key){const t=String(a.innerText||'').replace(/\s+/g,' ').trim().slice(0,160);if(t.length<20)return null;let h=0;for(const ch of t)h=(h*31+ch.codePointAt(0))|0;key='txt:'+h;}
+  (this.keys??=new WeakMap).set(a,key);return key;
+ },
  feedPosts(){
   const blocked='[aria-label*="Comment by" i],[data-testid*="comment" i],[data-pagelet*="Cover" i],[data-pagelet*="ProfileHeader" i],[data-pagelet*="PageHeader" i],[role="dialog"],[role="alertdialog"]';
   // Facebook can render its feed beside main or in a second main container.
