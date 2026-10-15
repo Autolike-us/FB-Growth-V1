@@ -7,7 +7,6 @@
   shadow.innerHTML = `<style>
     :host{all:initial;font:14px system-ui,-apple-system,"Segoe UI",sans-serif;
       --bg:#fff;--ink:#1c1e21;--muted:#65676b;--line:#dadde1;--soft:#f0f2f5;--accent:#1877f2;--ok:#12a594;--bad:#d4222a;--warnbg:#fff3d6;--warnink:#8a5200;--livebg:#ffe9ea;--liveink:#b3202a}
-    @media(prefers-color-scheme:dark){:host{--bg:#242526;--ink:#e4e6eb;--muted:#b0b3b8;--line:#3e4042;--soft:#3a3b3c;--warnbg:#4a3a14;--warnink:#ffcf7a;--livebg:#4a2326;--liveink:#ff9aa0}}
     *{box-sizing:border-box}
     button,input{font:inherit;color:inherit}
     button{cursor:pointer;border:1px solid var(--line);border-radius:12px;background:var(--soft);color:var(--ink);padding:9px 13px;font-weight:600}

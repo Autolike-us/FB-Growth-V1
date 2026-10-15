@@ -53,6 +53,10 @@ No build is needed to load the extension. `npm install` installs Playwright for 
 
 See `WORKFLOW_REVIEW.md` for the reference comparison and implementation map.
 
+## Version 2.0.29: light theme by default
+
+- The studio, popup and on-page panel now open in the light theme by default (the theme switch still remembers your choice).
+
 ## Version 2.0.6
 Aurora’s floating button and paused toolbar badge stay blue. Preview is enabled as a normal checkbox in both popup and studio: checked previews; unchecked enables live tasks. The header shows v2.0.6. The repository main branch may still be the old locked-preview 1.0.0 build until the draft PR is merged; install this release package to test automation.
 
