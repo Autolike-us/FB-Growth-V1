@@ -6,6 +6,7 @@
     "test": "node tests/planning.test.cjs && node tests/worker.test.cjs && node tests/license.test.cjs",
     "test:browser": "node tests/browser.test.cjs",
     "package": "node scripts/package.cjs",
+    "package:dev": "node scripts/package.cjs --dev",
     "test:license-ui": "node tests/license_ui.test.cjs"
   },
   "devDependencies": {

@@ -75,3 +75,6 @@ test('being offline never grants access with an expired token, and never wipes a
   assert.equal((await L.check()).allowed, true); // stale check time triggers a background refresh that fails offline; the token still works
   assert.ok(data.license.token);
 });
+
+test('a server error reply is reported with its HTTP status and never treated as an invalid key', async () => { const s = await signer(); const { L, data } = env({ jwk: s.jwk, fetchImpl: async () => ({ status: 500, json: async () => ({ ok: false, error: 'Something went wrong. Please try again.' }) }) }); const r = await L.activate('AUR-AAAA-BBBB-CCCC'); assert.equal(r.ok, false); assert.equal(r.offline, true); assert.match(r.message, /HTTP 500/); assert.match(r.message, /Something went wrong/); assert.notEqual(data.license?.status, 'invalid'); });
+test('a non-JSON reply (for example a firewall page) is reported as an unexpected reply', async () => { const s = await signer(); const { L } = env({ jwk: s.jwk, fetchImpl: async () => ({ status: 406, json: async () => { throw new Error('not json'); } }) }); const r = await L.activate('AUR-AAAA-BBBB-CCCC'); assert.equal(r.ok, false); assert.match(r.message, /HTTP 406/); });

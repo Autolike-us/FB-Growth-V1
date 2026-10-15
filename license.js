@@ -42,11 +42,13 @@
     const st = await read();
     if (!st.key) return { ok: false, status: 'none', message: needKey().message };
     const iid = await installId();
-    let res;
+    let res, r;
     try {
-      const r = await fetch(cfg().apiBase + '/api/license/verify', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: st.key, product: cfg().product, installId: iid, version: chrome.runtime.getManifest().version }) });
-      res = await r.json();
+      r = await fetch(cfg().apiBase + '/api/license/verify', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: st.key, product: cfg().product, installId: iid, version: chrome.runtime.getManifest().version }) });
     } catch { return { ok: false, offline: true, status: st.status || 'offline', message: 'Could not reach the Aurora license server. Check your internet connection.' }; }
+    try { res = await r.json(); } catch { res = null; }
+    // A reply that is not a license answer (a server error, a firewall page) is not a verdict on the key: say what came back and keep the saved state.
+    if (!res || (!res.ok && !res.status)) return { ok: false, offline: true, status: st.status || 'offline', message: `The license server sent an unexpected reply (HTTP ${r.status}${res && res.error ? ': ' + String(res.error).slice(0, 120) : ''}). Try again in a minute; if it keeps happening, contact support.` };
     if (res.ok) { await write({ token: res.token, expiresAt: res.expiresAt, status: res.status, trialEndsAt: res.trialEndsAt || null, renewsAt: res.renewsAt || null, message: res.message || '', checkedAt: Date.now() }); return { ok: true, status: res.status, message: res.message, trialEndsAt: res.trialEndsAt }; }
     await write({ token: null, expiresAt: 0, status: res.status || 'invalid', message: res.message || 'License not valid.', trialEndsAt: res.trialEndsAt || null, checkedAt: Date.now() });
     return { ok: false, status: res.status || 'invalid', message: res.message || 'License not valid.' };
