@@ -261,3 +261,8 @@ html,body{overflow-x:hidden}
 .linkbtn{border:0;background:transparent;color:var(--accent);padding:4px 8px;font-size:12px;text-decoration:underline;cursor:pointer}
 .status{display:inline-block;padding:4px 12px;border-radius:999px;font-weight:800;font-size:11px;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap}
 .status.trial{background:#fff3d6;color:#8a5200}.status.active{background:#e4f8f3;color:#0a6f5f}.status.expired,.status.none{background:#ffe9ea;color:#a1161f}
+
+.lic-note{margin:10px 0 0;font-size:12px;color:var(--muted)}.lic-note b{color:var(--text,inherit)}
+.support{display:grid;gap:4px;margin:10px 0}.support a{color:var(--accent);font-size:12px;text-decoration:none}.support a:hover{text-decoration:underline}
+footer a{color:var(--accent)}
+.popup .support{display:flex;gap:10px;margin:0 6px 0 0;flex-wrap:wrap}

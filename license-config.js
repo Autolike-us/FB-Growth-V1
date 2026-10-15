@@ -4,6 +4,7 @@ globalThis.AuroraLicenseConfig = {
   "enforce": true,
   "apiBase": "https://getaurorastudios.com",
   "siteUrl": "https://getaurorastudios.com",
+  "supportEmail": "support@getaurorastudios.com",
   "publicKeyJwk": {
     "kty": "EC",
     "crv": "P-256",

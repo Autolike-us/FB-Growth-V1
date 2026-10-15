@@ -187,7 +187,7 @@ check('browser fixtures produce no uncaught page errors',!errors.length);await p
  await ui.evaluate(()=>chrome.storage.local.set({draft:{action:'comment',target:'someuser',dry:false},config:{action:'comment',target:'someuser',comment:'Great post!',dry:false}}));
  await ui.click('#reset');check('Reset asks for a second click before erasing',/Click again/.test(await ui.textContent('#reset'))&&await ui.inputValue('#target')==='someuser, 12345678');
  await ui.click('#reset');await ui.waitForTimeout(200);
- check('Reset erases the target, comment, exclude list and numbers back to factory defaults',await ui.inputValue('#target')===''&&await ui.inputValue('#comment')===''&&await ui.inputValue('#exclude')===''&&await ui.inputValue('#perUser')==='3'&&await ui.inputValue('#delay')==='30'&&await ui.inputValue('#action')==='like');
+ check('Reset erases the target, comment, exclude list and numbers back to factory defaults',await ui.inputValue('#target')===''&&await ui.inputValue('#comment')===''&&await ui.inputValue('#exclude')===''&&await ui.inputValue('#perUser')==='3'&&await ui.inputValue('#delay')==='20'&&await ui.inputValue('#action')==='like');
  check('Reset puts Preview only back on',await ui.isChecked('#dry')&&/PREVIEW MODE/.test(await ui.textContent('#modeBar'))&&/Start preview/.test(await ui.textContent('#start')));
  check('Reset forgets the remembered draft and last-started config so nothing returns on reopen',await ui.evaluate(async()=>{const o=await chrome.storage.local.get(['draft','config']);return !o.draft&&!o.config;}));
  {
@@ -228,13 +228,13 @@ check('browser fixtures produce no uncaught page errors',!errors.length);await p
  check('target check turns clean once the list is valid',/2 recognised/.test(await n.textContent('#targetCheck'))&&!/not valid/.test(await n.textContent('#targetCheck')));
  // summary line
  const sum=await n.textContent('#startSummary');
- check('summary line shows mode, action, target count, per-target posts, pace and an estimate',/PREVIEW/.test(sum)&&/React \(Like\) to 2 targets/.test(sum)&&/up to 3 each/.test(sum)&&/every ~30s/.test(sum)&&/about/.test(sum));
+ check('summary line shows mode, action, target count, per-target posts, pace and an estimate',/PREVIEW/.test(sum)&&/React \(Like\) to 2 targets/.test(sum)&&/up to 3 each/.test(sum)&&/every ~20s/.test(sum)&&/about/.test(sum));
  await setDry(n,false);check('summary flips to LIVE when Preview only is off',/LIVE/.test(await n.textContent('#startSummary'))&&/is-live/.test(await n.getAttribute('#startSummary','class')));await setDry(n,true);
  await nsel('follow');check('summary changes with the action and drops the per-target part',/Follow 2 targets/.test(await n.textContent('#startSummary'))&&!/up to/.test(await n.textContent('#startSummary')));await nsel('like');
  // collapsible sections
  check('Pace & limits and Advanced start collapsed with a caption',!await n.evaluate(()=>document.getElementById('secPace').open)&&/limit 10/.test(await n.textContent('#paceSum'))&&/none set/.test(await n.textContent('#advSum')));
  await n.click('#secPace>summary');check('opening a section is remembered',await n.evaluate(async()=>{await new Promise(r=>setTimeout(r,150));return (await chrome.storage.local.get('ui')).ui.secPace===true;}));
- await n.fill('#delay','45');check('summary follows the pace fields',/every ~45s/.test(await n.textContent('#startSummary')));await n.fill('#delay','30');
+ await n.fill('#delay','45');check('summary follows the pace fields',/every ~45s/.test(await n.textContent('#startSummary')));await n.fill('#delay','20');
  // Ctrl+Enter
  await n.evaluate(()=>{window.__sent.length=0;});await n.focus('#target');await n.keyboard.press('Control+Enter');await n.waitForTimeout(300);
  check('Ctrl+Enter starts the task from the form',await n.evaluate(()=>window.__sent.some(m=>m.action==='start')));

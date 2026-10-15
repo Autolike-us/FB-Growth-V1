@@ -12,7 +12,7 @@ if (jwk.kty !== 'EC' || jwk.crv !== 'P-256' || jwk.d) { console.error('Need the 
 const cfgPath = path.join(root, 'license-config.js');
 let src = fs.readFileSync(cfgPath, 'utf8');
 const product = /["']?product["']?\s*:\s*["']([a-z]+)["']/.exec(src)[1];
-fs.writeFileSync(cfgPath, `// Written by scripts/configure-license.cjs\nglobalThis.AuroraLicenseConfig = ${JSON.stringify({ product, enforce: true, apiBase: api, siteUrl: api, publicKeyJwk: { kty: jwk.kty, crv: jwk.crv, x: jwk.x, y: jwk.y } }, null, 2)};\n`);
+fs.writeFileSync(cfgPath, `// Written by scripts/configure-license.cjs\nglobalThis.AuroraLicenseConfig = ${JSON.stringify({ product, enforce: true, apiBase: api, siteUrl: api, supportEmail: 'support@getaurorastudios.com', publicKeyJwk: { kty: jwk.kty, crv: jwk.crv, x: jwk.x, y: jwk.y } }, null, 2)};\n`);
 const mPath = path.join(root, 'manifest.json'), m = JSON.parse(fs.readFileSync(mPath, 'utf8'));
 m.host_permissions = [...new Set([...(m.host_permissions || []).filter(h => !h.includes('aurora.example.com') && h !== api + '/*'), api + '/*'])];
 fs.writeFileSync(mPath, JSON.stringify(m, null, 2) + '\n');

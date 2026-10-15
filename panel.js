@@ -48,11 +48,13 @@
     <div class="row"><button id="studio">Open full studio</button><button id="check">Check page</button></div>
     <div class="row" id="reportRow"><button id="copyReport">Copy error report</button></div>
     <pre id="report" hidden></pre>
+    <p class="note"><a id="help" target="_blank" rel="noreferrer">Report an issue or contact us</a></p>
   </section>
   <div class="bar"><button id="quickPause" hidden>⏸ Pause</button><button id="toggle" aria-expanded="false">✦ Aurora</button></div>`;
   document.documentElement.append(host);
   const $ = id => shadow.getElementById(id);
   try { $('ver').textContent = chrome.runtime.getManifest().version; } catch {}
+  try { const c = (typeof AuroraLicenseConfig !== 'undefined' && AuroraLicenseConfig) || {}, v = chrome.runtime.getManifest().version, n = ({ tiktok: 'TikTok' })[c.product] || String(c.product || 'studio').replace(/^./, x => x.toUpperCase()); $('help').href = 'mailto:' + (c.supportEmail || 'support@getaurorastudios.com') + '?subject=' + encodeURIComponent('[Aurora ' + n + ' ' + v + '] Issue report or question') + '&body=' + encodeURIComponent('What happened?\n\n\n--- Details ---\nAurora ' + n + ' ' + v + ' · ' + navigator.userAgent.slice(0, 110) + '\nPage: ' + location.hostname + '\n'); } catch {}
   const profile = location.pathname.match(/^\/([\w.]+)\/?$/)?.[1];
   if (profile && !['groups','reels','reel','watch','hashtag','marketplace','search','login','friends'].includes(profile)) $('target').value=profile;
   $('toggle').onclick=()=>{const section=shadow.querySelector('section');section.hidden=!section.hidden;$('toggle').setAttribute('aria-expanded',String(!section.hidden));};
@@ -96,7 +98,7 @@
     lic();
   }
   // Locked until a valid license key has been added in the studio.
-  async function lic(){try{if(typeof AuroraLicense==='undefined')return;const st=await AuroraLicense.peek(),busy=['running','paused'].includes(lastJob?.status);$('preview').disabled=!st.allowed||busy;if(!st.allowed&&!busy)$('message').textContent=st.message;}catch{}}
+  async function lic(){try{if(typeof AuroraLicense==='undefined')return;const st=await AuroraLicense.peek(),busy=['running','paused'].includes(lastJob?.status);$('preview').disabled=busy;}catch{}}
   chrome.storage.local.get('job').then(({job})=>render(job)).catch(error=>$('message').textContent=error.message);
   chrome.storage.onChanged.addListener((changes,area)=>{if(area==='local'&&changes.license)lic();if(area==='local'&&changes.job)render(changes.job.newValue);});
 })();

@@ -35,7 +35,7 @@
   }
 
   const unconfigured = () => ({ allowed: true, status: 'dev', message: 'License checks are switched off in this build.' });
-  const needKey = () => ({ allowed: false, status: 'none', message: `Add your Aurora license key to start. Get a free 3-day trial at ${cfg().siteUrl || 'the Aurora website'}.` });
+  const needKey = () => ({ allowed: false, status: 'none', message: 'Add your Aurora license key to run live tasks. Preview works without one.' });
 
   // Asks the server about this key. Stores the signed token on success, or the refusal on failure. Network trouble is not a refusal.
   async function refresh() {
