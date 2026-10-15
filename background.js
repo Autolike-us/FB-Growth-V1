@@ -1,4 +1,4 @@
-importScripts('selectors.js','engine.js');
+importScripts('selectors.js','engine.js','license-config.js','license.js');
 const base='https://www.facebook.com/';
 let busy=false;
 // Errors raised before any click is sent; safe to retry while Facebook finishes rendering.
@@ -72,6 +72,7 @@ async function tick(){
  try{
   const {job}=await chrome.storage.local.get('job');if(job?.status!=='running')return;
   if(!job.queue.length||(job.done||0)>=job.config.limit){await finish(job);return;}
+  {const lic=await AuroraLicense.check();if(!lic.allowed)throw Error('License: '+lic.message);}
   if(job.inFlight)throw Error('The last action was interrupted and its outcome is unknown. Check Facebook manually, stop this task, and create a new task for remaining targets.');
   if(Date.now()<(job.nextAt||0)){await schedule(job);return;}
   const step=job.queue[0];let tab;try{tab=await chrome.tabs.get(job.tabId);}catch{throw Error('The task tab was closed. Resume to open a new tab.');}
@@ -123,6 +124,7 @@ async function taskTab(url){
 }
 async function resumeTask(){
  const {job}=await chrome.storage.local.get('job');if(!job)throw Error('Create a task first.');
+ {const lic=await AuroraLicense.check();if(!lic.allowed)throw Error(lic.message);}
  if(busy)throw Error('A step is still finishing. Wait for its result before resuming.');
  if(job.inFlight)throw Error('Interrupted action: check Facebook manually, then stop this task and create a new task for remaining targets.');
  if(job.version!==4)throw Error('Stop the old-version task and create a new task.');if(job.status!=='paused')throw Error('Only paused tasks can resume.');
@@ -196,6 +198,7 @@ chrome.runtime.onMessage.addListener((m,s,respond)=>{
   if(m.action==='allowReactionRetry')return allowReactionRetry();
   if(m.action==='save'){await chrome.storage.local.set({config:m.config});return{ok:true};}
   if(m.action==='start'){
+   {const lic=await AuroraLicense.check();if(!lic.allowed)throw Error(lic.message);}
    if(busy)throw Error('A step is finishing. Try again shortly.');const old=(await chrome.storage.local.get('job')).job;if(['running','paused'].includes(old?.status))throw Error('Stop the current task first.');
    const config=AuroraEngine.config(m.config),queue=AuroraEngine.initial(config);if(!config.dry&&config.action==='like'&&config.reaction!=='Like'&&!await chrome.permissions.contains({permissions:['debugger']}))throw Error('Allow native mouse input in the studio to run this reaction.');if(!queue.length)throw Error('All targets are excluded.');
    await chrome.storage.local.set({config:m.config});const tab=await taskTab(queue[0].url);

@@ -4,6 +4,7 @@ const fs=require('node:fs'),path=require('node:path'),zlib=require('node:zlib');
 const root=path.join(__dirname,'..');
 const manifest=JSON.parse(fs.readFileSync(path.join(root,'manifest.json'),'utf8'));
 const name=require(path.join(root,'package.json')).name;
+if(!process.argv.includes('--dev')&&!/enforce:\s*true|"enforce":\s*true/.test(fs.readFileSync(path.join(root,'license-config.js'),'utf8'))){console.error('Refusing to package: license enforcement is off. Run `node scripts/configure-license.cjs --api https://your-site --jwk \'{...}\'` first, or pass --dev for an unlocked test build.');process.exit(1);}
 const files=[];
 for(const f of fs.readdirSync(root)){if(/\.(js|html|css|json|md)$/.test(f)&&!['package.json','package-lock.json'].includes(f))files.push(f);}
 for(const f of fs.existsSync(path.join(root,'icons'))?fs.readdirSync(path.join(root,'icons')):[])files.push('icons/'+f);

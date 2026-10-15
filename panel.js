@@ -93,7 +93,10 @@
     const bar=$('bar');bar.hidden=!active;if(active){bar.max=Number(job.config?.limit)||10;bar.value=job.done||0;}
     const qp=$('quickPause');qp.hidden=!active;qp.textContent=paused?'▶ Resume':'⏸ Pause';qp.onclick=()=>send(paused?'resume':'pause');
     tickNow();
+    lic();
   }
+  // Locked until a valid license key has been added in the studio.
+  async function lic(){try{if(typeof AuroraLicense==='undefined')return;const st=await AuroraLicense.peek(),busy=['running','paused'].includes(lastJob?.status);$('preview').disabled=!st.allowed||busy;if(!st.allowed&&!busy)$('message').textContent=st.message;}catch{}}
   chrome.storage.local.get('job').then(({job})=>render(job)).catch(error=>$('message').textContent=error.message);
-  chrome.storage.onChanged.addListener((changes,area)=>{if(area==='local'&&changes.job)render(changes.job.newValue);});
+  chrome.storage.onChanged.addListener((changes,area)=>{if(area==='local'&&changes.license)lic();if(area==='local'&&changes.job)render(changes.job.newValue);});
 })();

@@ -1,11 +1,12 @@
 {
   "name": "aurora-facebook-studio",
-  "version": "2.0.29",
+  "version": "2.1.0",
   "private": true,
   "scripts": {
-    "test": "node tests/planning.test.cjs && node tests/worker.test.cjs",
+    "test": "node tests/planning.test.cjs && node tests/worker.test.cjs && node tests/license.test.cjs",
     "test:browser": "node tests/browser.test.cjs",
-    "package": "node scripts/package.cjs"
+    "package": "node scripts/package.cjs",
+    "test:license-ui": "node tests/license_ui.test.cjs"
   },
   "devDependencies": {
     "playwright": "1.62.1"
