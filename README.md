@@ -53,6 +53,10 @@ No build is needed to load the extension. `npm install` installs Playwright for 
 
 See `WORKFLOW_REVIEW.md` for the reference comparison and implementation map.
 
+## Version 2.0.29: light theme by default
+
+- The studio, popup and on-page panel now open in the light theme by default (the theme switch still remembers your choice).
+
 ## Version 2.0.6
 Aurora’s floating button and paused toolbar badge stay blue. Preview is enabled as a normal checkbox in both popup and studio: checked previews; unchecked enables live tasks. The header shows v2.0.6. The repository main branch may still be the old locked-preview 1.0.0 build until the draft PR is merged; install this release package to test automation.
 
@@ -94,3 +98,31 @@ For page, group and hashtag targets, Like and Comment now work down the feed in 
 
 ## Version 2.0.13: comment and share in the feed
 Comment and Share now use the same in-feed walk as reactions. For each post Aurora opens the Comment control (Facebook labels it "Leave a comment"), types your text one character at a time with natural pauses, sends it, closes any pop-up Facebook opened, and moves to the next post. Share opens the post's Share menu and chooses Share now. Reactions: the palette is waited out and a stubborn post is skipped rather than pausing the task. Follow, unfollow, friend and join still visit each listed page/group; their header button now uses the first match when Facebook shows it twice.
+
+## Version 2.0.16: unfollow via Follow settings, page IDs
+Unfollow now handles Facebook's "Follow settings" dialog: it picks the Unfollow radio and presses Update (the older menu is still supported). Pages can be targeted by a bare numeric ID or a `profile.php?id=…` link; if Facebook redirects the ID to the page's username, Aurora continues on the redirected page instead of stopping.
+
+## Version 2.0.17: join dialogs, share menu, cleaner studio
+- **Join:** if Facebook shows a membership-questions or rules dialog, Aurora closes it without answering and moves to the next group (it is logged as skipped, and a later run can still try that group).
+- **Share:** the Share menu is read as a menu (not only buttons). Aurora picks "Share now", or "Share to Feed" followed by the composer's Share now/Post button; if neither exists it reports the options it saw. A post that cannot be handled is skipped; three in a row pause the task with the reason.
+- **Studio:** fields that do not apply to the chosen action are hidden (follow/unfollow/friend/join hide "posts per target" and the source picker; only React shows the reaction list; only Comment shows the comment box). A banner always says PREVIEW MODE (nothing is sent) or LIVE MODE, the start button reads "Start preview" or "Start live task", and finished preview runs say that nothing was sent.
+
+## Version 2.0.24: studio navigation
+- **Start summary + target check:** a line above Start restates the task (mode, action, target count, posts each, pace, time estimate), and the target box shows how many targets are recognised and which are not valid. Start is blocked with a clear message while one is invalid.
+- **Collapsible sections:** "Pace & limits" and "Advanced" fold away (their current values show in the caption) and remember whether you opened them.
+- **Live session card:** shows "Target 2 of 5 · name · post 1/3 · next in 24s", a per-target list (✓ done, ↷ skipped, ▶ current, ○ upcoming) and, when paused, **Skip this target & continue**.
+- **Sidebar badges:** a dot on Studio while running (red when paused), a count on Activity history, and a dot on Debug log for new errors.
+- **Activity history:** filter chips (All, Done, Skipped, Problems), search, and status icons.
+- **Saved setups:** a one-line summary of the selected setup and an "Update this setup with the current form" button.
+- **First-run checklist** (dismissible), **Ctrl+Enter** to start, a sticky Start bar in the full studio, and on Facebook the bubble shows progress with a one-click Pause/Resume.
+
+## Version 2.0.25: single scrollbar, redesigned on-page panel
+- **Popup:** only the page scrolls (no inner scrollbars, no sideways scrollbar); the Start bar no longer sits 21px off the edge.
+- **Aurora panel on Facebook:** matches the studio (follows light/dark), shows a PREVIEW or LIVE badge, and shows only the controls that apply — the preview form when idle; Pause and Stop while running; Resume, **Skip this target**, Stop and Copy error report when paused — with "Target 2 of 5 · name · next in 24s" and a progress bar.
+
+## Version 2.0.28: commenting on hashtag pages
+
+Clicking *Leave a comment* can open a post viewer that is not a `role=dialog`, which used to crash the comment step (`querySelector` of undefined). Aurora now finds the opened viewer by its comment editor and Close button, accepts the *Post comment* send button, and closes the viewer afterwards.
+
+## Version 2.0.26: no sticky Start bar
+Nothing is pinned to the window any more: in both the full studio and the popup, Start/Save are ordinary form content, with the one-line summary just above them.

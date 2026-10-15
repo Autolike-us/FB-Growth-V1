@@ -122,7 +122,7 @@ body.popup{width:760px;height:600px;min-height:580px;overflow-y:auto}
 .popup .brand{font-size:24px}
 .popup nav{display:flex;margin:0 0 0 auto;gap:5px}
 .popup nav button{font-size:12px;padding:8px 14px}
-.popup main{margin:0;padding:20px 20px 90px;max-width:none}
+.popup main{margin:0;padding:20px;max-width:none}
 .popup header h1{font-size:25px}
 .popup header p{font-size:12px}
 .popup header>.badge{display:none}
@@ -137,10 +137,14 @@ body.popup{width:760px;height:600px;min-height:580px;overflow-y:auto}
 .popup input:not([type=checkbox]),.popup select,.popup textarea{padding:8px 10px;font-size:12px}
 .popup .fields{gap:0 10px}
 .popup footer{margin:12px 0;font-size:10px}
-.popup .live{position:sticky;top:10px}
+/* Popup: one scrollbar only (the page's). The right column simply flows under the form instead of scrolling inside itself. */
+.popup .grid>div:last-child{align-self:start;min-width:0}
 .popup .hint{font-size:10px}
 .popup .banner{margin-top:12px;padding:12px 14px}
-.popup #task .actions{position:fixed;bottom:0;left:0;width:760px;margin:0;padding:12px 20px;background:var(--solid);border-top:1px solid var(--border);z-index:5;box-shadow:0 -8px 24px -12px rgba(0,0,0,.25)}
+/* no pinned bars anywhere: the popup's Start/Save buttons are ordinary form content too */
+.popup #task .actions{position:static;margin:16px 0 0}
+.popup .kbdtip{display:none}
+.popup main{padding-bottom:20px}
 .popup .aside-bottom{display:block;margin:0}
 .popup .aside-bottom p,.popup .aside-bottom .badge{display:none}
 .popup #theme{font-size:0;padding:5px 12px}
@@ -154,3 +158,94 @@ main a{color:var(--accent);text-decoration:underline;text-underline-offset:3px}
 #debug .primary{flex:none}
 
 .presets{margin-top:22px;padding-top:16px;border-top:1px dashed var(--border)}.presets .row{display:flex;gap:10px;flex-wrap:wrap;margin:10px 0}.presets input{width:100%;box-sizing:border-box}
+
+/* preview / live indicator */
+.modebar{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0 0 14px;padding:11px 14px;border-radius:14px;font-size:12.5px;line-height:1.5;font-weight:600}
+.modebar b{font-weight:800;letter-spacing:.04em}
+.modebar button{flex:none;padding:6px 12px;border-radius:10px;font-size:12px}
+.modebar.mode-preview{background:rgba(245,158,11,.14);border:1px solid rgba(245,158,11,.55);color:#8a5200}
+.dark .modebar.mode-preview{color:#ffcf7a}
+.modebar.mode-live{background:rgba(250,56,62,.10);border:1px solid rgba(250,56,62,.45);color:#b3202a}
+.dark .modebar.mode-live{color:#ff9aa0}
+.popup .modebar{font-size:11px;padding:8px 10px}
+[hidden]{display:none!important}
+.setups{margin-top:24px}
+.setups .row{display:flex;gap:8px;flex-wrap:wrap}
+.setups .row button{flex:1 1 auto}
+.setups select,.setups input{width:100%}
+.setups .row{margin:12px 0}
+.setups .row button{flex:1 1 0;padding:10px 8px;white-space:nowrap}
+.setups #presetName{margin-top:4px}
+
+/* ---- navigation upgrades ---- */
+/* collapsible form sections */
+details.sec{margin:16px 0 0;border:1px solid var(--border);border-radius:16px;padding:0 14px;background:transparent}
+details.sec>summary{cursor:pointer;list-style:none;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 0;font-size:13px}
+details.sec>summary::-webkit-details-marker{display:none}
+details.sec>summary::before{content:"▸";margin-right:8px;color:var(--muted);transition:transform .15s}
+details.sec[open]>summary::before{transform:rotate(90deg)}
+details.sec>summary b{flex:none}
+details.sec>summary small{margin-left:auto;color:var(--muted);font-size:11px;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+details.sec[open]{padding-bottom:12px}
+details.sec[open]>summary small{display:none}
+/* target check */
+.tcheck{font-size:12px;line-height:1.5;margin:6px 0 0;min-height:0}
+.tcheck .ok{color:var(--ok);font-weight:700}
+.tcheck .bad{color:var(--bad);font-weight:700}
+.tcheck .why{color:var(--muted)}
+/* start bar + summary */
+.startbar{margin-top:18px}
+#task .startbar{position:static;margin:18px 0 0;padding:0;border:0;background:none}
+.startbar .actions{margin:0}
+.summary{font-size:12px;line-height:1.5;margin:0 0 10px;padding:8px 12px;border-radius:12px;background:var(--tint);color:var(--ink)}
+.summary.is-live{background:rgba(250,56,62,.10);border:1px solid rgba(250,56,62,.35)}
+.summary.is-preview{border:1px solid rgba(245,158,11,.4);background:rgba(245,158,11,.10)}
+.summary b{font-weight:800}
+.kbdtip{margin:8px 0 0}
+kbd{font:600 10px ui-monospace,Consolas,monospace;padding:1px 5px;border:1px solid var(--border);border-radius:5px;background:var(--surface)}
+/* tab badges */
+nav button{position:relative}
+.tabdot{display:inline-block;width:9px;height:9px;border-radius:50%;background:#1fae7c;margin-left:8px;vertical-align:middle}
+.tabdot.warn{background:var(--bad)}
+.tabdot.pulse{animation:pulse 1.4s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+.tabcount{display:inline-block;margin-left:8px;padding:1px 7px;border-radius:999px;background:var(--tint);color:var(--accent);font-style:normal;font-size:11px;font-weight:700}
+/* history tools */
+.histtools{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:0 0 14px}
+.chip{padding:6px 12px;border-radius:999px;font-size:12px}
+.chip.on{background:var(--grad);color:#fff;border-color:transparent}
+.histtools input{flex:1 1 160px;min-width:140px;margin:0;padding:8px 12px;font-size:12px}
+.event .ic{display:inline-block;width:1.4em}
+.event.k-problem{border-left:3px solid var(--bad)}
+.event.k-skipped{opacity:.85}
+/* live session */
+.nowline{margin:6px 0 0;font-size:13px;font-weight:600;min-height:0}
+.tlist{margin:10px 0 0;display:grid;gap:4px;font-size:12px}
+.tlist div{display:flex;gap:8px;align-items:baseline;overflow-wrap:anywhere}
+.tlist .st{flex:none;width:1.2em;text-align:center}
+.tlist .cur{font-weight:700;color:var(--accent)}
+.tlist .more,.tlist .upc{color:var(--muted)}
+.tlist .skp{color:var(--muted)}
+/* first run */
+.firstrun{display:flex;gap:16px;align-items:flex-start;justify-content:space-between;margin:0 0 22px;padding:16px 20px;border-radius:20px;border:1px solid rgba(24,119,242,.35);background:rgba(24,119,242,.08);font-size:13px}
+.firstrun ul{margin:8px 0 0;padding-left:18px;line-height:1.7}
+.firstrun .okmark{color:var(--ok);font-weight:700}.firstrun .nomark{color:var(--bad);font-weight:700}
+.popup .firstrun{font-size:11px;padding:10px 14px;margin-bottom:14px}
+/* keep focused/scrolled-to controls clear of the sticky Start bar */
+/* (no sticky Start bar any more: nothing to keep controls clear of) */
+
+
+/* ---- layout fixes ---- */
+nav button{display:flex;align-items:center;gap:8px;white-space:nowrap}
+nav .tabcount,nav .tabdot{margin-left:auto}
+/* popup: the form (with its fixed Start bar) must stack above the pinned right column */
+.popup #task{position:relative;z-index:6}
+.popup .banner{flex-direction:column;align-items:flex-start;gap:10px}
+.popup .banner-actions{flex-wrap:wrap}
+
+/* never a horizontal scrollbar: long button labels wrap instead of overflowing */
+.setups button,.setups input,.setups select{min-width:0;max-width:100%}
+.setups .row button{white-space:normal;line-height:1.25}
+html,body{overflow-x:hidden}
+/* popup: a blurred (backdrop-filter) card becomes the containing block of position:fixed children, which pushed the Start bar 21px sideways. */
+.popup #task{backdrop-filter:none}

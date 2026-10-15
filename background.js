@@ -49,8 +49,12 @@ async function bumpDaily(){await chrome.storage.local.set({daily:{day:today(),co
 
 // Bring the task tab to the front so a captcha can be solved right away.
 async function focusTab(job){try{await chrome.tabs.update(job.tabId,{active:true});const t=await chrome.tabs.get(job.tabId);await chrome.windows.update(t.windowId,{focused:true,drawAttention:true});}catch{}}
+// Live mode is remembered in the studio form until the task is done; then the next form opens in Preview again.
+async function draftToPreview(){try{const {draft}=await chrome.storage.local.get('draft');if(draft&&draft.dry===false)await chrome.storage.local.set({draft:{...draft,dry:true}});}catch{}}
+// Per-target progress for the studio's Live session card.
+function closeStep(job,step,r){(job.finished??=[]).push({label:step.label||short(step.url),state:step.kind==='feed'?((step.count||0)>0?'done':'skipped'):(r&&(r.performed||r.preview)?'done':'skipped'),n:step.count||0});if(job.finished.length>200)job.finished.shift();}
 async function finish(job){
- job.status='completed';job.message=`Session complete: ${job.done||0} ${job.config.dry?'previewed':'actions confirmed'}, ${job.skipped||0} skipped.`;
+ job.status='completed';if(!job.config.dry)await draftToPreview();job.message=`Session complete: ${job.done||0} ${job.config.dry?'previewed':'actions confirmed'}, ${job.skipped||0} skipped.`;
  await save(job);await log(job.message);await dlog('info','Task finished: '+job.message);await chrome.alarms.clear('step');await notify('Aurora finished ✓',job.message);
 }
 // Send a step to the task tab; if the content script is missing (extension reloaded, tab opened earlier), attach it once and retry.
@@ -73,6 +77,8 @@ async function tick(){
   const step=job.queue[0];let tab;try{tab=await chrome.tabs.get(job.tabId);}catch{throw Error('The task tab was closed. Resume to open a new tab.');}
   if(tab.status!=='complete'){job.nextAt=Date.now()+2000;await save(job);await schedule(job);return;}
   if(/\/(?:login|checkpoint|recover)(?:[/?]|$)/.test(tab.url||''))throw Error('Sign in or complete verification on Facebook, then resume.');
+  // A page opened by numeric ID (profile.php?id=…) is often redirected by Facebook to its username. Follow that redirect instead of stopping.
+  if(job.navigation?.target===step.url&&job.navigation.attempts>=2&&['account','feed'].includes(step.kind)){const landed=AuroraSelectors.profileURL(tab.url);if(landed&&AuroraSelectors.profileURL(step.url)&&AuroraSelectors.pageKey(landed)!==AuroraSelectors.pageKey(step.url)){await dlog('info','Facebook redirected '+short(step.url)+' to '+short(landed)+'; continuing there');step.url=landed;job.navigation=null;}}
   if(AuroraSelectors.pageKey(tab.url)!==AuroraSelectors.pageKey(step.url)){
    if(job.navigation?.target===step.url&&job.navigation.attempts>=2)throw Error('Facebook redirected away from this target. Check the task tab and resume; Aurora stopped retrying the URL.');
    job.navigation={target:step.url,attempts:job.navigation?.target===step.url?job.navigation.attempts+1:1};job.message='Opening '+step.url;job.nextAt=Date.now()+2000;await save(job);await dlog('info','Opening '+short(step.url)+(job.navigation.attempts>1?` (attempt ${job.navigation.attempts})`:''));await chrome.tabs.update(job.tabId,{url:step.url,active:true});await schedule(job);return;
@@ -93,13 +99,15 @@ async function tick(){
   let more=[];
   if(step.kind==='feed'){
    // perUser counts posts actually reacted to/commented on; already-handled posts are skipped without using up the quota (bounded by a generous look-at cap).
+   // A post that could not be handled is skipped; three in a row means something systematic, so pause with the reason instead of grinding on.
+   if(r.failed){job.failStreak=(job.failStreak||0)+1;if(job.failStreak>=3)throw Error('Three posts in a row could not be handled. Last reason: '+String(r.message||'').replace(/^Skipped: /,''));}else if(r.key)job.failStreak=0;
    if(r.key)(job.seen??=[]).push(r.key);if(r.key)step.examined=(step.examined||0)+1;if(r.performed||r.preview)step.count=(step.count||0)+1;
-   if(r.end||(step.count||0)>=job.config.perUser||(step.examined||0)>=job.config.perUser*10+20)job.queue.shift();}
-  else{job.queue.shift();more=AuroraEngine.expand(job,step,r);job.queue.unshift(...more);}
+   if(r.end||(step.count||0)>=job.config.perUser||(step.examined||0)>=job.config.perUser*10+20){job.queue.shift();closeStep(job,step,r);}}
+  else{job.queue.shift();if(step.kind!=='posts')closeStep(job,step,r);more=AuroraEngine.expand(job,step,r);job.queue.unshift(...more);}
   let gap=quick();
   if(step.kind==='posts')job.message=`Discovered ${more.length} ${step.kind==='posts'?'posts':'profiles'}. ${r.note||''}`;
   else{if(r.performed||r.preview){gap=pause(job);job.done=(job.done||0)+1;if(r.performed){job.counts[job.config.action]++;await bumpDaily();}else job.previewed++;}else if(step.kind!=='feed'||r.key)job.skipped++;job.liked=job.counts.like;job.message=r.message;}
-  await log(job.message,r.url||step.url);await dlog('info','→ '+job.message,/^Skipped/.test(job.message||'')?ctx(r):undefined);
+  await log(job.message,r.url||step.url);await dlog('info','→ '+job.message,/^Skipped|could not confirm/.test(job.message||'')?ctx(r):undefined);
   if(interrupted){job.message=latest.message+' Last result: '+job.message;await save(job);return;}
   if(!job.queue.length||(job.done||0)>=job.config.limit){await finish(job);return;}
   job.nextAt=Date.now()+gap;await save(job);await schedule(job);
@@ -144,6 +152,18 @@ async function nativeReactionClick(m,s){
   await dlog('info','Native '+m.reaction+' reaction click dispatched');return {ok:true};
  }finally{if(attached)try{await chrome.debugger.detach(target);}catch{}}
 }
+// Paused on one stubborn page/group/post? Drop just that target (it is never retried) and carry on with the rest.
+async function skipTarget(){
+ if(busy)throw Error('A step is still finishing. Wait for its result before skipping.');
+ const {job}=await chrome.storage.local.get('job');if(job?.status!=='paused')throw Error('Only a paused task can skip its current target.');
+ const step=job.queue.shift();if(!step)throw Error('There is no target left to skip.');
+ (job.finished??=[]).push({label:step.label||short(step.url),state:'skipped',n:step.count||0,note:'skipped by you'});
+ job.skipped=(job.skipped||0)+1;job.inFlight=false;job.retries=0;job.navigation=null;job.failStreak=0;
+ await dlog('info','You skipped '+short(step.url));
+ if(!job.queue.length){await save(job);await finish(job);return{ok:true,message:job.message};}
+ job.message='Skipped '+(step.label||'that target')+'. Continuing with the next one.';await save(job);await log(job.message);
+ return resumeTask();
+}
 async function recordSuccessfulReaction(){
  if(busy)throw Error('Wait for the current step to finish.');
  const {job,receipts={}}=await chrome.storage.local.get(['job','receipts']);
@@ -167,7 +187,7 @@ async function allowReactionRetry(){
 chrome.runtime.onMessage.addListener((m,s,respond)=>{
  if(m.action==='nativeReactionClick'){nativeReactionClick(m,s).then(respond,e=>respond({ok:false,error:e.message,noClick:m.nativeDispatchStarted===false}));return true;}
  const ownPage=[chrome.runtime.getURL('dashboard.html'),chrome.runtime.getURL('popup.html')].includes(s.url?.split(/[?#]/)[0]);
- const panel=s.tab&&s.url?.startsWith(base)&&['openStudio','previewProfile','pause','resume','stop'].includes(m.action);
+ const panel=s.tab&&s.url?.startsWith(base)&&['openStudio','previewProfile','pause','resume','stop','skipTarget'].includes(m.action);
  if(s.id!==chrome.runtime.id||(!ownPage&&!panel)){respond({ok:false,error:'Dashboard commands only.'});return;}
  (async()=>{
   if(m.action==='openStudio'){await chrome.tabs.create({url:chrome.runtime.getURL('dashboard.html')});return{ok:true};}
@@ -179,15 +199,16 @@ chrome.runtime.onMessage.addListener((m,s,respond)=>{
    if(busy)throw Error('A step is finishing. Try again shortly.');const old=(await chrome.storage.local.get('job')).job;if(['running','paused'].includes(old?.status))throw Error('Stop the current task first.');
    const config=AuroraEngine.config(m.config),queue=AuroraEngine.initial(config);if(!config.dry&&config.action==='like'&&config.reaction!=='Like'&&!await chrome.permissions.contains({permissions:['debugger']}))throw Error('Allow native mouse input in the studio to run this reaction.');if(!queue.length)throw Error('All targets are excluded.');
    await chrome.storage.local.set({config:m.config});const tab=await taskTab(queue[0].url);
-   const job={version:4,id:crypto.randomUUID(),config,queue,tabId:tab.id,status:'running',counts:{like:0,follow:0,unfollow:0,comment:0,friend:0,join:0,share:0},done:0,liked:0,previewed:0,skipped:0,seen:[],seenUsers:[],nextAt:Date.now()+2000,message:`${config.dry?'Preview':'Live'} ${config.action} task started. Waiting for Facebook.`};
+   const job={version:4,id:crypto.randomUUID(),config,queue,total:queue.length,finished:[],tabId:tab.id,status:'running',counts:{like:0,follow:0,unfollow:0,comment:0,friend:0,join:0,share:0},done:0,liked:0,previewed:0,skipped:0,seen:[],seenUsers:[],nextAt:Date.now()+2000,message:`${config.dry?'Preview':'Live'} ${config.action} task started. Waiting for Facebook.`};
    await save(job);await log(job.message);await dlog('info',job.message,{action:config.action,reaction:config.reaction,mode:config.mode,target:String(config.target||'').slice(0,200),limit:config.limit,perUser:config.perUser,scanLimit:config.scanLimit,delay:config.delay,dailyCap:config.dailyCap,preview:config.dry,steps:queue.length});await schedule(job);return{ok:true,message:job.message};
   }
 
-  if(panel&&['pause','resume','stop'].includes(m.action)){const {job}=await chrome.storage.local.get('job');if(job?.tabId!==s.tab.id)throw Error('Open the task tab to control this session.');}
+  if(panel&&['pause','resume','stop','skipTarget'].includes(m.action)){const {job}=await chrome.storage.local.get('job');if(job?.tabId!==s.tab.id)throw Error('Open the task tab to control this session.');}
+  if(m.action==='skipTarget')return skipTarget();
   if(m.action==='resume')return resumeTask();
   const {job}=await chrome.storage.local.get('job');if(!job)throw Error('Create a task first.');
   if(m.action!=='pause'&&m.action!=='stop')throw Error('Unknown action.');
-  job.status=m.action==='pause'?'paused':'stopped';job.message=job.status+'. A click already sent may finish.';await chrome.alarms.clear('step');
+  job.status=m.action==='pause'?'paused':'stopped';if(m.action==='stop'&&!job.config.dry)await draftToPreview();job.message=job.status+'. A click already sent may finish.';await chrome.alarms.clear('step');
   await save(job);await dlog('info','You pressed '+m.action);return{ok:true,message:job.message};
  })().then(respond,e=>respond({ok:false,error:e.message}));return true;
 });

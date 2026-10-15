@@ -4,11 +4,53 @@ async function until(fn,id,ms=10000){for(let t=0;t<ms;t+=250){await active(id);c
 async function receipt(key,status){const {receipts={}}=await chrome.storage.local.get('receipts');receipts[key]={status,phase:'dispatch',time:Date.now()};await chrome.storage.local.set({receipts});}
 async function perform(key,id,click,confirm,message){const {receipts={}}=await chrome.storage.local.get('receipts');if(receipts[key])return{message:'Skipped: Aurora already attempted this action. Check Facebook; no duplicate sent.'};await active(id);await receipt(key,'attempted');await active(id);try{await click();}catch(e){if(e.noClick===true){const {receipts={}}=await chrome.storage.local.get('receipts');delete receipts[key];await chrome.storage.local.set({receipts});T('No click dispatched; cleared preparation receipt');}throw e;}T('Action dispatched');if(!await until(confirm,id,9000))throw Error('Action was sent but its outcome is unknown. Check Facebook manually. Aurora will not automatically repeat it.');await receipt(key,'confirmed');return{performed:true,message};}
 async function collectPosts(s,c,id){const read=()=>D.feedPosts();const root=await until(()=>D.scope(),id,12000);if(!root)throw Error('Facebook did not render this page.');await until(()=>read().length,id,12000);const posts=new Map();let stale=0;for(let i=0;i<20&&posts.size<c.perUser&&stale<3;i++){await active(id);const before=posts.size;for(const u of read())posts.set(S.pageKey(u),u);stale=posts.size===before?stale+1:0;if(posts.size>=c.perUser)break;D.scrollFeed(root);await wait(600);}if(!posts.size){if(/content isn.t available|this page isn.t available|no posts yet|no posts to show|private group|join this group to see/i.test(root.innerText))return{posts:[],note:'Skipped: unavailable, empty or private feed.'};throw Error('No posts appeared. Load an accessible page/group/hashtag and resume.');}return{posts:[...posts.values()].slice(0,c.perUser),note:'Collected rendered post links with bounded scrolling.'};}
-async function account(s,c,id){const header=()=>D.header(),button=(...labels)=>D.headerButton(...labels);if(!await until(header,id))throw Error('Facebook did not render this page.');if(!header().querySelector('h1,[role="heading"][aria-level="1"]'))throw Error('Cannot verify the rendered page/profile/group header. Nothing submitted.');if(AuroraEngine.excluded(s.url,s.label,c))return{message:'Skipped: excluded target.'};if(button('Edit profile','Edit Page','Manage'))return{message:'Skipped: your own profile/page.'};const who=D.actor()||'browser',key=who+':'+c.action+':'+S.pageKey(s.url)+(['follow','unfollow'].includes(c.action)?':'+id:'');
+async function account(s,c,id){const header=()=>D.header(),button=(...labels)=>D.headerButton(...labels);if(!await until(header,id))throw Error('Facebook did not render this page.');const known=['Follow','Following','Message','Add friend','Add Friend','Join group','Join Group','Joined','Friends','Requested','Contact us','Edit profile','Edit Page','Manage','Cancel request','Cancel Request'];if(!header().querySelector('h1,[role="heading"][aria-level="1"]')&&!D.headerControls().some(e=>known.includes(D.text(e))))throw Error('Cannot verify the rendered page/profile/group header. Nothing submitted. Controls seen: '+D.describeControls(header()));if(AuroraEngine.excluded(s.url,s.label,c))return{message:'Skipped: excluded target.'};if(button('Edit profile','Edit Page','Manage'))return{message:'Skipped: your own profile/page.'};const who=D.actor()||'browser',key=who+':'+c.action+':'+S.pageKey(s.url)+(['follow','unfollow'].includes(c.action)?':'+id:'');
 if(c.action==='follow'){if(button('Following','Requested','Friends'))return{message:'Skipped: already following or requested.'};let target=button('Follow');if(!target){const menu=button('More','Options');if(c.dry)return{message:'Skipped: Follow is not visible. Open the profile menu and try again.'};if(menu){await active(id);menu.click();await until(()=>D.dialogs().length||document.querySelector('[role="menu"]'),id,3000);const root=[...document.querySelectorAll('[role="menu"]'),...D.dialogs()].filter(e=>D.visible(e));target=root.map(r=>D.button(r,'Follow')).find(Boolean);}}if(!target)throw Error('Follow control unavailable. Open the target profile/page menu and resume.');if(c.dry)return{preview:true,message:'Preview: follow '+s.label+'. No change made.'};return perform(key,id,()=>target.click(),()=>button('Following','Requested')||D.dialogs().some(d=>/following/i.test(d.innerText)),'Followed/requested '+s.label+'.');}
-if(c.action==='unfollow'){let following=button('Following');if(!following)return{message:'Skipped: Following control is not visible; no unfollow sent.'};if(c.dry)return{preview:true,message:'Preview: unfollow '+s.label+'. No change made.'};return perform(key,id,async()=>{following.click();const choice=await until(()=>[...D.dialogs(),...document.querySelectorAll('[role="menu"]')].map(r=>D.button(r,'Unfollow')).find(Boolean)||button('Follow'),id,5000);if(!choice)throw Error('Unfollow menu was not found. Check Facebook manually.');if(D.text(choice)==='Unfollow'){await active(id);choice.click();const confirm=await until(()=>D.dialogs().map(d=>D.button(d,'Unfollow','Confirm')).find(Boolean)||button('Follow'),id,3000);if(confirm&&D.text(confirm)!=='Follow'){await active(id);confirm.click();}}},()=>button('Follow'),'Unfollowed '+s.label+'.');}
-if(c.action==='friend'){if(button('Friends','Cancel request','Cancel Request','Friend request sent'))return{message:'Skipped: already friends or requested.'};const target=button('Add friend','Add Friend');if(!target)return{message:'Skipped: friend requests are unavailable for this profile.'};if(c.dry)return{preview:true,message:'Preview: send a friend request to '+s.label+'. No change made.'};return perform(key,id,()=>target.click(),()=>button('Cancel request','Cancel Request','Friend request sent','Friends'),'Sent a friend request to '+s.label+'.');}
-if(c.action==='join'){if(button('Joined','Leave group','Member'))return{message:'Skipped: already a member.'};if(button('Cancel request','Cancel Request','Request sent'))return{message:'Skipped: a membership request is pending.'};const target=button('Join group','Join Group');if(!target)throw Error('Join group control unavailable.');if(c.dry)return{preview:true,message:'Preview: join/request membership in '+s.label+'. No change made.'};return perform(key,id,async()=>{target.click();const outcome=await until(()=>button('Joined','Member','Cancel request','Cancel Request','Request sent')||D.dialogs().find(d=>/membership questions|answer.*questions|group rules|agree to/i.test(d.innerText)),id,5000);if(outcome?.getAttribute?.('role')==='dialog')throw Error('Group requires membership questions or rules. Complete them manually; Aurora will not answer or agree for you.');},()=>button('Joined','Member','Cancel request','Cancel Request','Request sent'),'Joined/requested membership in '+s.label+'.');}throw Error('Unsupported account action.');}
+if(c.action==='unfollow'){
+ const following=button('Following');if(!following)return{message:'Skipped: Following control is not visible; no unfollow sent.'};
+ if(c.dry)return{preview:true,message:'Preview: unfollow '+s.label+'. No change made.'};
+ const noClick=m=>Object.assign(Error(m),{noClick:true});
+ const closePanel=async p=>{const x=p&&(D.button(p,'Cancel')||D.button(p,'Close'));if(x){x.click();await wait(500);}};
+ return perform(key,id,async()=>{
+  D.reveal(following);await wait(400);following.click();
+  // Current Facebook opens "Follow settings": radio choices (Default / Favorites / Unfollow) and an Update button. Older layouts use a menu with an Unfollow item.
+  const panel=await until(()=>D.dialogs().find(d=>d.querySelector('input[type="radio"][value="UNFOLLOW"]'))||[...D.dialogs(),...document.querySelectorAll('[role="menu"]')].filter(e=>D.visible(e)).find(r=>D.button(r,'Unfollow')),id,6000);
+  if(!panel)throw noClick('Unfollow menu was not found. Nothing was changed. Check Facebook manually.');
+  const radio=panel.querySelector('input[type="radio"][value="UNFOLLOW"]');
+  if(radio){
+   await wait(500+Math.random()*600);await active(id);(radio.closest('label')||radio).click();await wait(500);
+   if(!radio.checked&&radio.getAttribute('aria-checked')!=='true'){await closePanel(panel);throw noClick('Could not select Unfollow in Follow settings. Nothing was saved.');}
+   const update=await until(()=>D.button(panel,'Update'),id,3000);
+   if(!update){await closePanel(panel);throw noClick('Update button not found in Follow settings. Nothing was saved.');}
+   await wait(400+Math.random()*500);await active(id);update.click();return;
+  }
+  const choice=D.button(panel,'Unfollow');await active(id);choice.click();
+  const confirm=await until(()=>D.dialogs().map(d=>D.button(d,'Unfollow','Confirm')).find(Boolean)||button('Follow'),id,3000);
+  if(confirm&&D.text(confirm)!=='Follow'){await active(id);confirm.click();}
+ },()=>button('Follow'),'Unfollowed '+s.label+'.');
+}
+if(c.action==='friend'){const sent=/^(Friends|Cancel request|Friend request sent|Request sent)\b/i,add=/^Add friend\b/i;if(D.headerMatch(sent))return{message:'Skipped: already friends or requested.'};const target=D.headerMatch(add);if(!target)return{message:'Skipped: friend requests are unavailable for this profile.'};if(c.dry)return{preview:true,message:'Preview: send a friend request to '+s.label+'. No change made.'};return perform(key,id,()=>{D.reveal(target);target.click();},()=>D.headerMatch(sent),'Sent a friend request to '+s.label+'.');}
+if(c.action==='join'){
+ if(D.headerMatch(/^(Joined|Leave group|Member)\b/i))return{message:'Skipped: already a member.'};
+ if(D.headerMatch(/^(Cancel request|Request sent)\b/i))return{message:'Skipped: a membership request is pending.'};
+ const target=D.headerMatch(/^Join( group)?$/i);if(!target)throw Error('Join group control unavailable.');
+ if(c.dry)return{preview:true,message:'Preview: join/request membership in '+s.label+'. No change made.'};
+ const done=()=>D.headerMatch(/^(Joined|Member|Cancel request|Request sent)\b/i);
+ const form=d=>/membership questions|answer.*questions|group rules|agree to|rules of|before you join/i.test(d.innerText||'');
+ // Some groups open a questions/rules dialog. Aurora never answers or agrees for you: close it and move on to the next group.
+ const closeForm=async d=>{for(let n=0;n<3&&D.dialogs().length;n++){const x=D.dialogs().map(p=>D.button(p,'Close','Cancel','Not now','Back')).find(Boolean);if(x){await active(id);x.click();}else document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',code:'Escape',keyCode:27,which:27,bubbles:true}));await wait(600);}};
+ try{
+  return await perform(key,id,async()=>{
+   D.reveal(target);await wait(400);target.click();
+   const outcome=await until(()=>done()||D.dialogs().find(form),id,6000);
+   if(outcome&&outcome.nodeType===1&&outcome.getAttribute('role')==='dialog'){await closeForm(outcome);throw Object.assign(Error('SKIP: needs membership questions or rules, which Aurora never answers. Closed it.'),{noClick:true});}
+  },done,'Joined/requested membership in '+s.label+'.');
+ }catch(e){
+  if(/^SKIP:/.test(e.message))return{message:'Skipped: '+e.message.slice(6)};
+  throw e;
+ }
+}
+throw Error('Unsupported account action.');}
 async function likePost(root,key,s,c,id){
  let target=await until(()=>D.reactionButton(root()),id,4000);if(!target)throw Error('Cannot identify a unique post reaction control. Use Check page.');
  if(D.reacted(target))return{message:'Skipped: post already has your reaction.'};if(D.reacted(target)!==false)throw Error('Cannot read the post reaction state. No click sent.');
@@ -50,7 +92,8 @@ async function likePost(root,key,s,c,id){
   for(let t=0;t<14&&!point;t++){await active(id);if(c.reaction!=='Like'){const ch=D.reactionChoice(c.reaction,target);if(ch)pick=ch.element;}point=D.point(pick)||(c.reaction!=='Like'?D.pointByReaction(pick,c.reaction):null);if(!point){if(t===6&&c.reaction!=='Like')D.hover(target);await wait(250);}}
   if(!point)throw Object.assign(Error('The reaction choice is covered or outside the visible post. No click sent.'),{noClick:true});if(c.reaction==='Like'){pick.click();return;}const result=await chrome.runtime.sendMessage({action:'nativeReactionClick',jobId:id,url:s.url,reaction:c.reaction,x:point.x,y:point.y});if(!result?.ok)throw Object.assign(Error(result?.error||'Native reaction input returned no result.'),{noClick:result?.noClick===true});},()=>{const scope=root()||(confirmationScope?.isConnected?confirmationScope:null);const b=(target.isConnected&&D.selectedReaction(target)?target:null)||D.reactionButton(scope);const selected=D.selectedReaction(b);if(selected)T('selected reaction',selected);return selected===c.reaction;},'Reacted '+c.reaction+' to post.');
 }
-async function commentPost(root,key,c,id){
+async function commentPost(root0,key,c,id){
+ const root=()=>D.viewerRoot()||root0()||null;
  let field=D.field(root());
  const opener=()=>D.ownControls(root()).filter(e=>/^(Comment|Comments|Comment on this post|Leave a comment|Write a comment)/i.test(D.text(e)))[0]||null;
  if(!field){
@@ -58,7 +101,7 @@ async function commentPost(root,key,c,id){
   if(c.dry&&target)return{preview:true,message:'Preview: comment control available; editor not opened. Nothing typed or posted.'};
   if(target){await active(id);D.reveal(target);await wait(400);target.click();field=await until(()=>D.field(root()),id,6000);}
  }
- if(!field)return{message:'Skipped: a unique comment editor is unavailable.'};
+ if(!field){T('No comment editor. Opener:',opener()?D.text(opener()):'none','| dialogs',D.dialogs().length,'| editable boxes:',[...document.querySelectorAll('[contenteditable="true"],textarea')].filter(e=>D.visible(e)).map(e=>(e.getAttribute('aria-label')||e.getAttribute('placeholder')||e.tagName).slice(0,36)).join(' ; ')||'none');return{message:'Skipped: a unique comment editor is unavailable.'};}
  if(c.dry)return{preview:true,message:'Preview: comment on target post. Nothing typed or posted.'};
  if(D.fieldText(field).trim())throw Error('Comment box already contains a draft. Clear it manually before resuming.');
  const {receipts={}}=await chrome.storage.local.get('receipts');if(receipts[key])return{message:'Skipped: comment previously attempted. No duplicate sent.'};
@@ -69,21 +112,40 @@ async function commentPost(root,key,c,id){
  T('Typing comment');await D.typeHuman(field,want,()=>active(id));
  if(D.fieldText(field).trim()!==want)throw Error('Comment did not type correctly. Nothing submitted.');
  await wait(600+Math.random()*900);
- return perform(key,id,async()=>{const submit=D.submitFor(field);await active(id);if(submit)submit.click();else{for(const type of ['keydown','keypress','keyup'])field.dispatchEvent(new KeyboardEvent(type,{key:'Enter',code:'Enter',keyCode:13,which:13,bubbles:true,cancelable:true}));}},()=>hasText()&&(!D.field(root())||!D.fieldText(D.field(root())).trim()),'Posted your comment.');
+ // Also confirm when the editor emptied and the text now appears one more time on the page than before (the comment can render outside the post box).
+ const occ=t=>(document.body.innerText.split(want).length-1)-(t?(D.fieldText(t).split(want).length-1):0),before=occ(field),emptied=()=>!field.isConnected||!D.fieldText(field).trim();
+ return perform(key,id,async()=>{const submit=D.submitFor(field);T('Send via',submit?'button '+D.text(submit):'Enter key');await active(id);if(submit)submit.click();else{for(const type of ['keydown','keypress','keyup'])field.dispatchEvent(new KeyboardEvent(type,{key:'Enter',code:'Enter',keyCode:13,which:13,bubbles:true,cancelable:true}));}},()=>(hasText()&&(!D.field(root())||!D.fieldText(D.field(root())).trim()))||(emptied()&&occ(null)>before),'Posted your comment.');
 }
 async function sharePost(root,key,c,id){
  const shares=D.ownControls(root()).filter(e=>/^(Share|Share this post|Share reel|Share, send this to friends|Send this to friends)/i.test(D.text(e)));
  if(!shares.length)return{message:'Skipped: no Share control on this post.'};
  if(c.dry)return{preview:true,message:'Preview: share target post to your feed using Facebook’s current audience. No change made.'};
- const menus=()=>[...D.dialogs(),...document.querySelectorAll('[role="menu"]')].filter(e=>D.visible(e)&&/share/i.test(e.innerText||''));
- const feedButton=m=>D.controls(m).find(e=>/^(Share now|Share to Feed|Share to your feed)/i.test(D.text(e)))||D.button(m,'Share');
+ const ITEM='button,[role="button"],[role="menuitem"],[role="menuitemradio"],[role="option"],[role="radio"],a[role="link"],[role="listitem"] [tabindex="0"]';
+ const menus=()=>[...D.dialogs(),...document.querySelectorAll('[role="menu"],[role="listbox"]')].filter(e=>D.visible(e)&&/share/i.test(e.innerText||''));
+ const items=m=>[...m.querySelectorAll(ITEM)].filter(e=>D.visible(e)&&e.getAttribute('aria-disabled')!=='true');
+ const label=e=>D.text(e);
+ // Preferred: an immediate "Share now" to your feed. Next: "Share to Feed", which opens a composer with its own Share now/Post button.
+ const immediate=m=>items(m).find(e=>/^Share now\b/i.test(label(e)));
+ const toFeed=m=>items(m).find(e=>/^Share to (your )?(Feed|profile)\b/i.test(label(e)));
+ const composerSubmit=m=>items(m).find(e=>/^(Share now|Post|Share)$/i.test(label(e)));
  return perform(key,id,async()=>{
   D.reveal(shares[0]);await wait(500);shares[0].click();
-  const menu=await until(()=>menus()[0],id,6000);if(!menu)throw Error('Share dialog unavailable. Nothing automatically submitted.');
-  if(/Share to a group|Send in Messenger/.test(menu.querySelector('h1,h2,[role="heading"]')?.textContent||''))throw Error('Unexpected share destination. Review it manually.');
-  const send=feedButton(menu);if(!send)throw Error('Feed share submit button unavailable. Review Facebook manually.');
-  await wait(500+Math.random()*700);await active(id);send.click();
- },()=>[...document.querySelectorAll('[role="alert"],[role="status"]')].some(e=>D.visible(e)&&/post (?:was )?shared|shared to your|shared successfully|shared/i.test(e.innerText))||!menus().length,'Shared post to your feed.');
+  // The dialog opens first and fills in a moment later: wait for a usable option, not just for the dialog.
+  const menu=await until(()=>menus().find(m=>immediate(m)||toFeed(m)||composerSubmit(m)),id,10000)||menus()[0];
+  if(!menu)throw Object.assign(Error('Share menu did not open. Nothing was shared.'),{noClick:true});
+  if(/Share to a group|Send in Messenger/.test(menu.querySelector('h1,h2,[role="heading"]')?.textContent||'')&&!immediate(menu)&&!toFeed(menu))throw Object.assign(Error('Unexpected share destination. Review it manually.'),{noClick:true});
+  let pick=immediate(menu),second=false;
+  if(!pick){pick=toFeed(menu);second=!!pick;}
+  if(!pick)pick=composerSubmit(menu);
+  if(!pick)throw Object.assign(Error('Feed share button not found. Share menu options seen: '+(items(menu).map(label).filter(Boolean).slice(0,12).join(' | ')||'none')+'. Nothing was shared.'),{noClick:true});
+  T('Share option',label(pick));
+  await wait(500+Math.random()*700);await active(id);pick.click();
+  if(second){
+   const composer=await until(()=>menus().map(composerSubmit).find(Boolean)||D.dialogs().map(composerSubmit).find(Boolean),id,6000);
+   if(!composer)throw Error('Share composer did not show a Share now/Post button. Check Facebook manually.');
+   await wait(600+Math.random()*700);await active(id);composer.click();
+  }
+ },()=>[...document.querySelectorAll('[role="alert"],[role="status"]')].some(e=>D.visible(e)&&/shared/i.test(e.innerText))||!menus().length,'Shared post to your feed.');
 }
 async function engage(s,c,id){const root=()=>D.postRoot(s.url);if(!await until(root,id,12000))throw Error('Post content did not render as a unique target. No action sent.');const author=D.author(root());if(author&&AuroraEngine.excluded(author,'',c))return{message:'Skipped: excluded post author.'};const who=D.actor()||'browser',key=who+':'+c.action+':'+S.pageKey(s.url)+(c.action==='like'?':'+c.reaction:'');
 if(c.action==='like')return likePost(root,key,s,c,id);
@@ -92,7 +154,7 @@ if(c.action==='share')return sharePost(root,key,c,id);throw Error('Unsupported p
 // Feed mode: work down the page the way a person does. Take the first post not handled yet, react/comment in place, then scroll on.
 const feedIgnored=new Set();
 async function closeDialogs(id,s){
- for(let n=0;n<3;n++){const d=D.dialogs().find(x=>D.button(x,'Close'));if(!d)break;await active(id);D.button(d,'Close').click();await wait(600);}
+ for(let n=0;n<3;n++){const d=D.dialogs().find(x=>D.button(x,'Close'));const v=d?null:D.closeViewer();if(!d&&!v)break;await active(id);(d?D.button(d,'Close'):v).click();await wait(600);}
  // A post dialog can change the address bar; step back so the feed (and its scroll position) is still there for the next post.
  if(s&&S.pageKey(location.href)!==S.pageKey(s.url)){history.back();await wait(1200);}
 }
@@ -127,8 +189,12 @@ async function feedRun(s,c,id,seen){
    else r=await commentPost(()=>D.dialogs().find(d=>D.field(d))||find()?.box,who+':comment:'+pk,c,id);
   }catch(e){
    // Errors that guarantee no click was sent (or an unconfirmed one) skip this post instead of pausing the whole task.
-   if(/No click sent|No reaction click was sent/.test(e.message))return{key,url,message:'Skipped: '+e.message};
-   if(/outcome is unknown/.test(e.message)){const b=D.reactionButton(find()?.row);if(b&&D.reacted(b)===true)return{key,url,performed:true,message:'Reacted to post (could not confirm it is '+c.reaction+'; check Facebook).'};return{key,url,message:'Skipped: reaction click was sent but could not be confirmed. Check this post on Facebook.'};}
+   if(e.noClick===true||/No click sent|No reaction click was sent/.test(e.message))return{key,url,failed:true,message:'Skipped: '+e.message};
+   if(/outcome is unknown/.test(e.message)){
+    // The action was sent, so count it (never exceed your limit) and say plainly that it was not confirmed.
+    if(c.action==='comment')return{key,url,performed:true,message:'Comment sent but could not confirm it appeared. Check this post on Facebook.'};
+    if(c.action==='share')return{key,url,performed:true,message:'Share sent but could not confirm it. Check Facebook.'};
+    const b=D.reactionButton(find()?.row);if(b&&D.reacted(b)===true)return{key,url,performed:true,message:'Reacted to post (could not confirm it is '+c.reaction+'; check Facebook).'};return{key,url,message:'Skipped: reaction click was sent but could not be confirmed. Check this post on Facebook.'};}
    throw e;
   }finally{if(c.action!=='like')await closeDialogs(id,s);}
   return{...r,key,url};

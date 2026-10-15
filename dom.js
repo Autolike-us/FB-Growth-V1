@@ -26,6 +26,9 @@ const D=globalThis.AuroraDOM={
  controls(root){return [...(root?.querySelectorAll('button,[role="button"]')||[])].filter(e=>this.visible(e)&&!e.disabled&&e.getAttribute('aria-disabled')!=='true');},
  button(root,...labels){const matches=this.controls(root).filter(e=>labels.includes(this.text(e)));return matches.length===1?matches[0]:null;},
  scope(){const mains=[...document.querySelectorAll('[role="main"],main')].filter(e=>this.visible(e));const score=e=>e.querySelectorAll('[role="article"],[role="feed"],[data-pagelet*="FeedUnit"],h1').length;return mains.sort((a,b)=>score(b)-score(a))[0]||null;},
+ // A post viewer that opened over the feed (often without role=dialog): the container holding a comment editor and a Close button.
+ viewerRoot(){for(const f of document.querySelectorAll('[contenteditable="true"][role="textbox"],textarea')){if(!this.visible(f)||!/comment/i.test(f.getAttribute('aria-label')||'')||/repl/i.test(f.getAttribute('aria-label')||''))continue;for(let p=f.parentElement,i=0;p&&p!==document.body&&i<25;p=p.parentElement,i++){if(this.controls(p).some(e=>/^Close$/i.test(this.text(e))))return p;}}return null;},
+ closeViewer(){const r=this.viewerRoot();const b=r&&this.controls(r).find(e=>/^Close$/i.test(this.text(e)));return b||null;},
  dialogs(){return [...document.querySelectorAll('[role="dialog"],[role="alertdialog"]')].filter(e=>this.visible(e));},
  ownControls(root){return this.controls(root).filter(e=>{if(e.closest('[aria-label*="Comment by" i],[data-testid*="comment" i]'))return false;const a=e.closest('[role="article"]');return !a||a===root||!root.contains(a);});},
  actionRows(root,media=false){
@@ -124,9 +127,12 @@ const D=globalThis.AuroraDOM={
   for(const feed of document.querySelectorAll('[role="feed"]'))if(this.visible(feed)&&!feed.closest(blocked))links.push(...feed.querySelectorAll('a[href*="/reel/"]'));
   return [...new Set(links.filter(a=>this.visible(a)&&!a.closest(blocked)).map(a=>S.postURL(a.href)).filter(Boolean))];
  },
- header(){const main=this.scope();if(!main)return null;return main.querySelector('[data-pagelet="ProfileTiles"],[data-pagelet="ProfileHeader"],[data-pagelet="PageHeader"],[data-pagelet="GroupHeader"]')||main;},
+ // The whole main column: ProfileTiles is the Intro/Photos side panel (no Follow button), and newer headers carry no h1 or pagelet marker.
+ header(){return this.scope();},
  headerControls(){return this.controls(this.header()).filter(e=>!e.closest('[role="article"]'));},
  // A page can show the same Follow/Message button twice (header and sticky bar); the first one in the document is the real header.
+ // Match a header control by pattern: Facebook puts the person's name in some labels ("Add Friend Jane Doe").
+ headerMatch(re){return this.headerControls().find(e=>re.test(this.text(e)))||null;},
  headerButton(...labels){const buttons=this.headerControls().filter(e=>labels.includes(this.text(e)));return buttons[0]||null;},
  author(root){return [...root.querySelectorAll('h2 a[href],h3 a[href],strong a[href],a[data-profile-link]')].filter(e=>this.visible(e)).map(e=>S.profileURL(e.href)).find(Boolean)||null;},
  actor(){return [...document.querySelectorAll('[role="banner"] a[href],nav a[href],[role="navigation"] a[href]')].filter(e=>this.visible(e)&&(/^(Your profile|Profile|Account)$/i.test(e.getAttribute('aria-label')||'')||e.querySelector('img[alt="Your profile"],img[alt="Your profile picture"]'))).map(e=>S.profileURL(e.href)).find(Boolean)||null;},
@@ -203,8 +209,8 @@ const D=globalThis.AuroraDOM={
   return {element:palette.items[i],method:'native palette label'};
  },
  reacted(button){if(!button)return null;if(this.selectedReaction(button))return true;if(button.getAttribute('aria-pressed')==='true'||/^Remove |^(Love|Care|Haha|Wow|Sad|Angry)$/.test(this.text(button)))return true;if(button.getAttribute('aria-pressed')==='false'||this.text(button)==='Like')return false;return null;},
- commentRows(root){return [...root.querySelectorAll('[role="article"]')].filter(e=>e!==root&&this.visible(e));},
- field(root){const arr=[...root.querySelectorAll('textarea,[contenteditable="true"][role="textbox"],div[contenteditable="true"][aria-label]')].filter(e=>this.visible(e)&&/comment/i.test(e.getAttribute('aria-label')||e.getAttribute('placeholder')||'')&&!/repl/i.test(e.getAttribute('aria-label')||e.getAttribute('placeholder')||''));return arr.length===1||(this.lenient&&arr.length>1)?arr[0]:null;},
+ commentRows(root){return [...(root?.querySelectorAll('[role="article"]')||[])].filter(e=>e!==root&&this.visible(e));},
+ field(root){if(!root)return null;const arr=[...root.querySelectorAll('textarea,[contenteditable="true"][role="textbox"],div[contenteditable="true"][aria-label]')].filter(e=>this.visible(e)&&/comment/i.test(e.getAttribute('aria-label')||e.getAttribute('placeholder')||'')&&!/repl/i.test(e.getAttribute('aria-label')||e.getAttribute('placeholder')||''));return arr.length===1||(this.lenient&&arr.length>1)?arr[0]:null;},
  // Types one character at a time with human-like, uneven pauses (longer at spaces and punctuation, an occasional hesitation).
  async typeHuman(f,text,tick){
   const wait=ms=>new Promise(r=>setTimeout(r,ms));f.focus();
@@ -216,7 +222,7 @@ const D=globalThis.AuroraDOM={
   }
  },
  // The send arrow sits next to the editor; look outward from it a few levels for a Comment/Post/Send control.
- submitFor(field){for(let p=field.parentElement,i=0;p&&p!==document.body&&i<7;p=p.parentElement,i++){const b=this.controls(p).find(e=>/^(Comment|Post|Send|Reply|Submit)$/i.test(this.text(e))&&!e.contains(field));if(b)return b;}return null;},
+ submitFor(field){for(let p=field.parentElement,i=0;p&&p!==document.body&&i<7;p=p.parentElement,i++){const b=this.controls(p).find(e=>/^(Comment|Post|Post comment|Send|Reply|Submit)$/i.test(this.text(e))&&!e.contains(field));if(b)return b;}return null;},
  fieldText(f){return 'value'in f?f.value:f.innerText;},
  type(f,text){f.focus();if('value'in f){const proto=f.tagName==='TEXTAREA'?HTMLTextAreaElement.prototype:HTMLInputElement.prototype;Object.getOwnPropertyDescriptor(proto,'value').set.call(f,text);f.dispatchEvent(new InputEvent('input',{bubbles:true,inputType:'insertText',data:text}));}else{document.execCommand('selectAll',false);if(!document.execCommand('insertText',false,text)){f.textContent=text;f.dispatchEvent(new InputEvent('input',{bubbles:true,inputType:'insertText',data:text}));}}},
  warning(){if(/\/(?:login|checkpoint|recover)(?:[/?]|$)/.test(location.pathname)||document.querySelector('input[type="password"]'))return 'Sign in or complete verification on Facebook, then resume.';const lang=document.documentElement.lang;if(lang&&!/^en(?:-|$)/i.test(lang))return 'Use Facebook in English so action labels can be verified.';const zones=[...document.querySelectorAll('[role="alert"],[role="alertdialog"],[role="dialog"],h1,h2')].filter(e=>this.visible(e));for(const e of zones){const text=e.innerText||e.textContent||'';if(/temporarily blocked|you.re temporarily blocked|we limit how often|you can.t use this feature|account restricted|try again later|confirm your identity|security check|enter the code|captcha|verify you.re human/i.test(text))return 'Facebook requested a restriction or verification. Check the task tab before resuming.';}return null;}
