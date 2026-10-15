@@ -1,9 +1,13 @@
-// License settings. Run scripts/configure-license.cjs to point this build at your site and turn enforcement on.
-// While enforce is false the extension runs unlocked (development builds only; `npm run package` refuses to build like this).
+// Written by scripts/configure-license.cjs
 globalThis.AuroraLicenseConfig = {
-  product: 'facebook',
-  enforce: false,
-  apiBase: 'https://aurora.example.com',
-  siteUrl: 'https://aurora.example.com',
-  publicKeyJwk: null,
+  "product": "facebook",
+  "enforce": true,
+  "apiBase": "https://getaurorastudios.com",
+  "siteUrl": "https://getaurorastudios.com",
+  "publicKeyJwk": {
+    "kty": "EC",
+    "crv": "P-256",
+    "x": "Bw9PpO-bUS9Ltee1gEUCT3TOFQZ_Cj0nabrDrOq7XCQ",
+    "y": "EGo-9YEtWOyP4E5vSk20YJW03rdd1fsrlLKDBjgC5Ew"
+  }
 };

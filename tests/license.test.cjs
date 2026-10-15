@@ -2,7 +2,7 @@
 const test = require('node:test'), assert = require('node:assert/strict'), vm = require('node:vm'), fs = require('node:fs'), path = require('node:path');
 const { webcrypto } = require('node:crypto');
 const ROOT = path.join(__dirname, '..'), read = f => fs.readFileSync(path.join(ROOT, f), 'utf8');
-const PRODUCT = /product:\s*'([a-z]+)'/.exec(read('license-config.js'))[1];
+const PRODUCT = /["']?product["']?\s*:\s*["']([a-z]+)["']/.exec(read('license-config.js'))[1];
 const b64u = b => Buffer.from(b).toString('base64url');
 
 async function signer() {
