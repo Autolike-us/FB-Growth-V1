@@ -53,6 +53,10 @@ No build is needed to load the extension. `npm install` installs Playwright for 
 
 See `WORKFLOW_REVIEW.md` for the reference comparison and implementation map.
 
+## Version 1.0.0: license system
+
+- License system (for selling Aurora): a License box in the studio/popup where the customer pastes their key; live tasks (Start/Resume/every step) are blocked without a valid trial or subscription, while Preview works without a key. License tokens are signed (ES256) by the Aurora website and checked offline; they refresh every 12 hours and work for up to 72 hours offline. Builds stay unlocked until you run `node scripts/configure-license.cjs --api https://your-site --jwk '{…public key…}'`, and `npm run package` refuses to build an unlocked zip (use `--dev` for a test build).
+
 ## Version 2.0.29: light theme by default
 
 - The studio, popup and on-page panel now open in the light theme by default (the theme switch still remembers your choice).

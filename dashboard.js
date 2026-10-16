@@ -1,6 +1,7 @@
 const $=id=>document.getElementById(id); const fields=['action','reaction','comment','mode','target','perUser','limit','delay','dailyCap','exclude','dry'];
 const hints={users:'Exact usernames or full page/profile links, separated by commas or new lines. Search names are not accepted.',groups:'Exact group IDs, slugs or full /groups/ links, separated by commas or new lines.',hashtag:'One hashtag (like #travel) or its hashtag link.',posts:'Full post links, separated by commas or new lines.',reels:'Full reel or video links, separated by commas or new lines.',market:'A search word (like bike). Visits the Marketplace search for it.'};
 function settings(){const o=Object.fromEntries(fields.map(k=>[k,$(k).type==='checkbox'?$(k).checked:$(k).value]));return o;}
+let licenseOk=true,jobActive=false;const canRun=()=>licenseOk||$('dry').checked,refreshStart=()=>{$('start').disabled=jobActive||!canRun();};
 function notice(s){$('notice').textContent=s;}
 async function send(action,data={}){try{if(action==='resume'){const {job}=await chrome.storage.local.get('job');if(!job?.config.dry&&job?.config.action==='like'&&job.config.reaction!=='Like'&&!await chrome.permissions.contains({permissions:['debugger']}))throw Error('Native mouse input permission is required to resume this reaction.');}const r=await chrome.runtime.sendMessage({action,...data});if(!r?.ok)throw Error(r?.error||'No response');notice(r.message||'Saved.');await render();return true;}catch(e){notice(e.message);return false;}}
 function updateForm(){
@@ -36,8 +37,8 @@ function paintMode(){
  const btn=document.createElement('button');btn.type='button';btn.textContent=dry?'Switch to live':'Back to preview';btn.onclick=()=>{$('dry').checked=!$('dry').checked;disarm();paintMode();rememberForm();};
  bar.append(msg,btn);if(!armed)$('start').textContent=startLabel();
 }
-$('dry').addEventListener('change',()=>{disarm();paintMode();});
-$('task').onsubmit=async e=>{e.preventDefault();const config=settings();
+$('dry').addEventListener('change',()=>{disarm();paintMode();refreshStart();});
+$('task').onsubmit=async e=>{e.preventDefault();if(!canRun()){notice('Live tasks need a license key. Preview works without one — or add your key above (free 3-day trial, no card needed).');$('licKey')?.focus();return;}const config=settings();
  {const pt=parseTargets();if(!pt.skip&&pt.bad.length){disarm();notice('Fix '+pt.bad.length+' target'+(pt.bad.length===1?'':'s')+' first: "'+pt.bad[0].raw+'" — '+pt.bad[0].why);$('target').focus();return;}}
  if(!config.dry&&!armed){$('start').textContent='Confirm live '+config.action;notice('Live task: '+config.action+' on '+config.target+'. Up to '+config.limit+' confirmed actions. Click Confirm within 15 seconds to start.');armed=setTimeout(disarm,15000);return;}
  if(!config.dry&&config.action==='like'&&!config.reaction.endsWith('Like')){try{const granted=await chrome.permissions.contains({permissions:['debugger']});if(!granted){disarm();notice('Love and other non-Like reactions need native mouse input permission. Reload or reinstall the updated extension. No task started.');return;}}catch(e){disarm();notice('Native mouse input permission: '+e.message);return;}}
@@ -64,7 +65,7 @@ function backToPreviewIfDone(st,job){
 async function render(){if(!$('debug').hidden)renderDebug();const {job,history=[],debugLog=[]}=await chrome.storage.local.get(['job','history','debugLog']);const st=job?.status||'ready';backToPreviewIfDone(st,job);document.body.dataset.status=st;document.title=(st==='paused'?'🔔 Needs you · ':st==='running'?'● Running · ':st==='completed'?'✓ Done · ':'')+'Aurora';
  const banner=$('banner'),bad=st==='paused',good=st==='completed';banner.hidden=!(bad||good);banner.classList.toggle('ok',good);
  $('bannerRecordReaction').hidden=!(bad&&job?.config.action==='like'&&job?.queue?.[0]?.kind==='engage');$('bannerRetryReaction').hidden=!(bad&&job?.config.action==='like'&&job?.queue?.[0]?.kind==='engage');if(bad||good){$('bannerTitle').textContent=bad?'🔔 Aurora paused — it needs you':(job.config?.dry?'👁 Preview complete — nothing was sent':'✓ Session complete');$('bannerText').textContent=(good&&job.config?.dry?'This was only a preview, so no likes, comments, follows, joins or shares were made. To run it for real, untick “Preview only” (or press “Switch to live”) and start again. ':'')+(job.message||'');$('bannerResume').hidden=!bad;$('bannerStop').hidden=!bad;$('bannerCopy').hidden=!bad;}
- $('liked').textContent=job?.done??job?.liked??0;$('skipped').textContent=job?.skipped||0;$('status').textContent=job?.status||'Ready';$('message').textContent=(job?.config?.dry&&job?.status&&job.status!=='ready'?'👁 Preview run — nothing was sent. ':'')+(job?.message||'Your next session starts here.');$('progress').max=Number(job?.config.limit)||10;{const left=job?.queue?.length||0,secs=left*(Number(job?.config?.delay)||30)*1.2,active=['running','paused'].includes(job?.status);$('eta').textContent=active&&left?`${left} step${left===1?'':'s'} left · about ${secs<90?'1':Math.round(secs/60)} min`:'';}$('progress').value=job?.done??job?.liked??0;$('start').disabled=['running','paused'].includes(job?.status);$('pause').disabled=job?.status!=='running';$('resume').disabled=job?.status!=='paused';$('stop').disabled=!['running','paused'].includes(job?.status);renderEvents(history);paintNav(job,history,debugLog);paintLive(job);}
+ $('liked').textContent=job?.done??job?.liked??0;$('skipped').textContent=job?.skipped||0;$('status').textContent=job?.status||'Ready';$('message').textContent=(job?.config?.dry&&job?.status&&job.status!=='ready'?'👁 Preview run — nothing was sent. ':'')+(job?.message||'Your next session starts here.');$('progress').max=Number(job?.config.limit)||10;{const left=job?.queue?.length||0,secs=left*(Number(job?.config?.delay)||20)*1.2,active=['running','paused'].includes(job?.status);$('eta').textContent=active&&left?`${left} step${left===1?'':'s'} left · about ${secs<90?'1':Math.round(secs/60)} min`:'';}$('progress').value=job?.done??job?.liked??0;jobActive=['running','paused'].includes(job?.status);refreshStart();$('pause').disabled=job?.status!=='running';$('resume').disabled=job?.status!=='paused';$('stop').disabled=!['running','paused'].includes(job?.status);renderEvents(history);paintNav(job,history,debugLog);paintLive(job);}
 $('clearHistory').onclick=async()=>{if($('clearHistory').dataset.sure!=='1'){$('clearHistory').dataset.sure='1';$('clearHistory').textContent='Click again to clear';setTimeout(()=>{$('clearHistory').dataset.sure='';$('clearHistory').textContent='Clear history';},4000);return;}$('clearHistory').dataset.sure='';$('clearHistory').textContent='Clear history';await chrome.storage.local.set({history:[]});await render();};$('export').onclick=async()=>{const {history=[]}=await chrome.storage.local.get('history');const cell=v=>{let t=String(v??'');if(/^[=+\-@\t\r]/.test(t))t="'"+t;return '"'+t.replace(/"/g,'""')+'"';};const csv=['time,event,url',...history.map(e=>[new Date(e.time).toISOString(),e.message,e.url].map(cell).join(','))].join('\r\n');const url=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));const a=document.createElement('a');a.href=url;a.download='aurora-history.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
 (async()=>{const {config:saved,draft,dark,ui:savedUi}=await chrome.storage.local.get(['config','draft','dark','ui']);Object.assign(ui,savedUi||{});if(ui.debugSeen===undefined){ui.debugSeen=Date.now();saveUi();}$('secPace').open=!!ui.secPace;$('secAdv').open=!!ui.secAdv;initFirstRun();const config=draft||saved;if(config)for(const k of fields){if(config[k]!==undefined){if($(k).type==='checkbox')$(k).checked=config[k];else $(k).value=config[k];}}$('dry').checked=draft?.dry!==false;$('dry').disabled=false;document.body.classList.toggle('dark',dark===true);$('mode').onchange();await render();})();chrome.storage.onChanged.addListener(async changes=>{await render();if(changes?.job?.newValue?.message)notice(changes.job.newValue.message);});window.addEventListener('unhandledrejection',e=>notice('Extension error: '+(e.reason?.message||e.reason)));document.querySelectorAll('input,textarea,select').forEach(el=>el.addEventListener('input',()=>{if(armed)disarm();}));document.querySelectorAll('input,textarea,select').forEach(el=>el.addEventListener('invalid',()=>notice('Check the highlighted field: '+el.id),true));
 // ---- Remembered form, reset and named setups ---------------------------------------------------------------
@@ -120,7 +121,7 @@ function paintTargetCheck(){
 // ---- one-line summary above Start, plus the collapsed-section captions ----
 function paintSummary(){
  const dry=$('dry').checked,action=$('action').value,p=parseTargets(),n=p.skip?($('target').value.trim()?1:0):p.ok.length;
- const perUser=Number($('perUser').value)||1,limit=Number($('limit').value)||1,delay=Number($('delay').value)||30,cap=Number($('dailyCap').value)||0;
+ const perUser=Number($('perUser').value)||1,limit=Number($('limit').value)||1,delay=Number($('delay').value)||20,cap=Number($('dailyCap').value)||0;
  const post=['like','comment','share'].includes(action),direct=['posts','reels'].includes($('mode').value);
  const steps=n?Math.min(limit,post?(direct?n:n*perUser):n):0,secs=Math.round(steps*delay*1.2+n*6);
  const eta=!steps?'':secs<100?'about 1–2 min':'about '+Math.round(secs/60)+' min';
@@ -204,3 +205,39 @@ async function initFirstRun(){
 }
 $('firstRunOk').onclick=()=>{ui.firstRunDone=true;saveUi();$('firstRun').hidden=true;};
 paintAll();
+
+// ================= License =================
+async function paintLicense(){
+ const bar=$('licenseBar');if(!bar||typeof AuroraLicense==='undefined'||!AuroraLicenseConfig.enforce){licenseOk=true;if(bar)bar.hidden=true;return;}
+ let st;try{st=await AuroraLicense.check();}catch(e){st={allowed:false,status:'error',message:e.message};}
+ licenseOk=!!st.allowed;bar.hidden=false;
+ const cls={active:'active',trial:'trial'}[st.status]||'expired',label={active:'Subscribed',trial:'Free trial',none:'No license',expired:'Trial ended',invalid:'Invalid key',device_limit:'Device limit',wrong_plan:'Not in your plan',error:'Error'}[st.status]||'License';
+ $('licChip').className='status '+cls;$('licChip').textContent=label;
+ let text=st.message||'';if(st.allowed&&st.status==='trial'&&st.trialEndsAt)text='Free trial — ends '+new Date(st.trialEndsAt).toLocaleDateString()+'. Subscribe on your account page to keep going.';
+ if(st.allowed&&st.status==='active')text='Thank you for subscribing.';
+ $('licText').textContent=text;
+ $('licForm').hidden=licenseOk&&!licChanging;$('licChange').hidden=!licenseOk||licChanging;
+ const site=AuroraLicenseConfig.siteUrl||'';$('licGet').href=site+'/signup';$('licGet').hidden=licenseOk;
+ refreshStart();$('licNote')&&($('licNote').hidden=licenseOk);
+}
+let licChanging=false;
+$('licChange')?.addEventListener('click',()=>{licChanging=true;paintLicense();$('licKey').focus();});
+$('licForm')?.addEventListener('submit',async e=>{e.preventDefault();const b=$('licGo');b.disabled=true;b.textContent='Checking…';
+ try{const r=await AuroraLicense.activate($('licKey').value);licChanging=!r.ok&&licChanging;$('licText').textContent=r.message||'';if(r.ok){$('licKey').value='';licChanging=false;notice('License accepted.');}else notice(r.message||'License not valid.');}catch(err){notice('License check failed: '+err.message);}
+ b.disabled=false;b.textContent='Activate';await paintLicense();await render();});
+paintLicense();
+chrome.storage.onChanged.addListener((c,area)=>{if(area==='local'&&c.license)paintLicense();});
+
+// ================= Support =================
+(function(){
+ const email=(typeof AuroraLicenseConfig!=='undefined'&&AuroraLicenseConfig.supportEmail)||'support@getaurorastudios.com',m=chrome.runtime.getManifest(),prod=(typeof AuroraLicenseConfig!=='undefined'&&AuroraLicenseConfig.product)||'studio',name=({tiktok:'TikTok'})[prod]||prod.charAt(0).toUpperCase()+prod.slice(1);
+ const head=()=>'Aurora '+name+' '+m.version+' · '+navigator.userAgent.replace(/^Mozilla\/5\.0 /,'').slice(0,110)+' · license: '+(($('licChip')&&$('licChip').textContent)||'n/a');
+ const link=(subject,body)=>'mailto:'+email+'?subject='+encodeURIComponent(subject)+'&body='+encodeURIComponent(body);
+ const issue=$('reportIssue'),contact=$('contactUs');
+ if(issue){
+  const paint=()=>{issue.href=link('['+'Aurora '+name+' '+m.version+'] Issue report','What happened?\n\n\nWhat did you expect?\n\n\nSteps to reproduce:\n\n\n--- Details (please keep) ---\n'+head()+'\n\nThe diagnostic report was copied to your clipboard when you clicked "Report an issue" — paste it below (Ctrl+V):\n\n');};
+  paint();
+  issue.addEventListener('click',async()=>{try{await navigator.clipboard.writeText(await AuroraReport.build(300));notice('Diagnostic report copied. Paste it into the email that opens (Ctrl+V). If no email app opens, write to '+email+'.');}catch{notice('If no email app opens, write to '+email+' and describe what happened.');}paint();});
+ }
+ if(contact)contact.href=link('['+'Aurora '+name+'] Question','Hello Aurora team,\n\n\n\n--- Details ---\n'+head()+'\n');
+})();

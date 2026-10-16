@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
-  "name": "Aurora \u2022 Facebook Studio",
-  "version": "2.0.29",
+  "name": "Aurora • Facebook Studio",
+  "version": "1.0.0",
   "description": "Personal Facebook post discovery, reactions, follows, comments, friend requests, group joins and shares with preview and local history.",
   "permissions": [
     "storage",
@@ -13,7 +13,8 @@
     "debugger"
   ],
   "host_permissions": [
-    "https://www.facebook.com/*"
+    "https://www.facebook.com/*",
+    "https://getaurorastudios.com/*"
   ],
   "background": {
     "service_worker": "background.js"
@@ -39,6 +40,8 @@
         "dom.js",
         "report.js",
         "content.js",
+        "license-config.js",
+        "license.js",
         "panel.js"
       ],
       "run_at": "document_idle"
