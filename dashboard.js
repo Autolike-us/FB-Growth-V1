@@ -237,7 +237,7 @@ chrome.storage.onChanged.addListener((c,area)=>{if(area==='local'&&c.license)pai
  if(issue){
   const paint=()=>{issue.href=link('['+'Aurora '+name+' '+m.version+'] Issue report','What happened?\n\n\nWhat did you expect?\n\n\nSteps to reproduce:\n\n\n--- Details (please keep) ---\n'+head()+'\n\nThe diagnostic report was copied to your clipboard when you clicked "Report an issue" — paste it below (Ctrl+V):\n\n');};
   paint();
-  issue.addEventListener('click',async()=>{try{await navigator.clipboard.writeText(await AuroraReport.build(300));notice('Diagnostic report copied. Paste it into the email that opens (Ctrl+V). If no email app opens, write to '+email+'.');}catch{notice('If no email app opens, write to '+email+' and describe what happened.');}paint();});
+  issue.addEventListener('click',async()=>{try{await navigator.clipboard.writeText(await AuroraReport.build(300));notice('Diagnostic report copied. Paste it into the email that opens (Ctrl+V), or post it in our Telegram channel (Aurora Studios Report — link below). If no email app opens, write to '+email+'.');}catch{notice('If no email app opens, write to '+email+' and describe what happened.');}paint();});
  }
  if(contact)contact.href=link('['+'Aurora '+name+'] Question','Hello Aurora team,\n\n\n\n--- Details ---\n'+head()+'\n');
 })();
