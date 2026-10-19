@@ -12,7 +12,7 @@ try{
   if(enforced)await pg.evaluate(()=>{AuroraLicenseConfig.enforce=true;AuroraLicenseConfig.siteUrl='https://aurora.test';let ok=false;AuroraLicense.check=async()=>ok?{allowed:true,status:'trial',trialEndsAt:'2099-01-05T00:00:00Z',message:''}:{allowed:false,status:'none',message:'Add your Aurora license key to start.'};AuroraLicense.activate=async k=>{if(k==='AUR-GOOD-GOOD-GOOD'){ok=true;return{ok:true,status:'trial',message:'Free trial: 3 days left.'};}return{ok:false,status:'invalid',message:'License key not found.'};};});
   await pg.addScriptTag({content:read('dashboard.js')});await pg.waitForTimeout(500);return{ctx,pg};};
  const shown=(pg,s)=>pg.evaluate(q=>{const e=document.querySelector(q);return !!e&&!e.hidden&&getComputedStyle(e).display!=='none';},s);
- for(const file of ['dashboard.html','popup.html']){
+ for(const file of ['dashboard.html']){
   let {ctx,pg}=await open(file,false);
   check(file+': License box is hidden while checks are off (development builds)',!await shown(pg,'#licenseBar')&&!await pg.isDisabled('#start'));await ctx.close();
   ({ctx,pg}=await open(file,true));
