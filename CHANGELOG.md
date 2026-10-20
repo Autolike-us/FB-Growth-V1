@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.2.1 — Your home feed
+- **Your home feed** is a new source for reacting, commenting and sharing: Aurora works down your own Facebook home feed. No target needed.
+
 ## 1.2.0 — A different comment on each post
 - New option under "Comment on posts": **Use a different comment on each post**. Write one comment per line (at least two). Aurora picks one at random for each post and does not repeat a comment until all have been used; the same post always keeps its comment if a step is retried or resumed.
 - Everything else about commenting is unchanged: one comment per post, preview first, nothing is sent until you confirm.

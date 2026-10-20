@@ -1,12 +1,12 @@
 const $=id=>document.getElementById(id); const fields=['action','reaction','comment','commentMany','mode','target','perUser','limit','delay','dailyCap','exclude','dry'];
-const hints={users:'Exact usernames or full page/profile links, separated by commas or new lines. Search names are not accepted.',groups:'Exact group IDs, slugs or full /groups/ links, separated by commas or new lines.',hashtag:'One hashtag (like #travel) or its hashtag link.',posts:'Full post links, separated by commas or new lines.',reels:'Full reel or video links, separated by commas or new lines.',market:'A search word (like bike). Visits the Marketplace search for it.'};
+const hints={users:'Exact usernames or full page/profile links, separated by commas or new lines. Search names are not accepted.',groups:'Exact group IDs, slugs or full /groups/ links, separated by commas or new lines.',hashtag:'One hashtag (like #travel) or its hashtag link.',posts:'Full post links, separated by commas or new lines.',reels:'Full reel or video links, separated by commas or new lines.',home:'Works down your own Facebook home feed, top to bottom: reacts, comments or shares the posts it finds. No target needed.',market:'A search word (like bike). Visits the Marketplace search for it.'};
 function settings(){const o=Object.fromEntries(fields.map(k=>[k,$(k).type==='checkbox'?$(k).checked:$(k).value]));return o;}
 let licenseOk=true,jobActive=false;const canRun=()=>licenseOk||$('dry').checked,refreshStart=()=>{$('start').disabled=jobActive||!canRun();};
 function notice(s){$('notice').textContent=s;}
 async function send(action,data={}){try{if(action==='resume'){const {job}=await chrome.storage.local.get('job');if(!job?.config.dry&&job?.config.action==='like'&&job.config.reaction!=='Like'&&!await chrome.permissions.contains({permissions:['debugger']}))throw Error('Native mouse input permission is required to resume this reaction.');}const r=await chrome.runtime.sendMessage({action,...data});if(!r?.ok)throw Error(r?.error||'No response');notice(r.message||'Saved.');await render();return true;}catch(e){notice(e.message);return false;}}
 function updateForm(){
  const action=$('action').value;
- for(const option of $('mode').options)option.disabled=option.value==='market'||(action==='join'&&option.value!=='groups')||(['follow','unfollow','friend'].includes(action)&&option.value!=='users');
+ for(const option of $('mode').options)option.disabled=option.value==='market'||(option.value==='home'&&!['like','comment','share'].includes(action))||(action==='join'&&option.value!=='groups')||(['follow','unfollow','friend'].includes(action)&&option.value!=='users');
  if(action==='join')$('mode').value='groups';if(['follow','unfollow','friend'].includes(action))$('mode').value='users';if($('mode').selectedOptions[0]?.disabled)$('mode').value='users';
  $('commentGroup').hidden=action!=='comment';$('comment').required=action==='comment';
  {const cm=$('comment'),many=$('commentMany').checked;cm.dataset.max=cm.dataset.max||cm.maxLength;cm.maxLength=many?6000:+cm.dataset.max;cm.placeholder=many?'One comment per line — for example:\nLove this!\nSuch a great shot\nThanks for sharing':'Write the exact comment you want posted';const h=$('commentGroup').querySelector('.hint');h.dataset.one=h.dataset.one||h.textContent;h.textContent=many?'Each post gets one of the comments above (one per line), chosen at random. Aurora still attempts at most one comment per post.':h.dataset.one;}$('reactionGroup').hidden=action!=='like';
@@ -20,6 +20,7 @@ function updateForm(){
  document.querySelector('label[for="target"]').textContent=({follow:'Pages / profiles to follow',unfollow:'Pages / profiles to unfollow',friend:'Profiles to send requests to',join:'Groups to join'})[action]||'Target';
  document.querySelector('label[for="perUser"]').textContent=['comment','share'].includes(action)?'Posts to '+(action==='share'?'share':'comment on')+' per target':'Posts to react to per target';
  paintMode();
+ {const home=!account&&$('mode').value==='home';$('target').hidden=home;document.querySelector('label[for="target"]').hidden=home;$('target').required=!home;$('targetCheck').hidden=home;}
  $('target').placeholder={users:'cafe.lovers, Jane Doe, or a page link',groups:'Group name or link',hashtag:'#travel',posts:'Full post links',reels:'Full reel or video links',market:'bike'}[$('mode').value];
 }
 $('mode').onchange=()=>{disarm();updateForm();};$('commentMany').addEventListener('change',()=>{disarm();updateForm();});$('action').onchange=()=>{disarm();updateForm();rememberForm();};
@@ -41,7 +42,7 @@ function paintMode(){
 $('dry').addEventListener('change',()=>{disarm();paintMode();refreshStart();});
 $('task').onsubmit=async e=>{e.preventDefault();if(!canRun()){notice('Live tasks need a license key. Preview works without one — or add your key above (free 3-day trial, no card needed).');$('licKey')?.focus();return;}const config=settings();
  {const pt=parseTargets();if(!pt.skip&&pt.bad.length){disarm();notice('Fix '+pt.bad.length+' target'+(pt.bad.length===1?'':'s')+' first: "'+pt.bad[0].raw+'" — '+pt.bad[0].why);$('target').focus();return;}}
- if(!config.dry&&!armed){$('start').textContent='Confirm live '+config.action;notice('Live task: '+config.action+' on '+config.target+'. Up to '+config.limit+' confirmed actions. Click Confirm within 15 seconds to start.');armed=setTimeout(disarm,15000);return;}
+ if(!config.dry&&!armed){$('start').textContent='Confirm live '+config.action;notice('Live task: '+config.action+' on '+(config.mode==='home'?'your home feed':config.target)+'. Up to '+config.limit+' confirmed actions. Click Confirm within 15 seconds to start.');armed=setTimeout(disarm,15000);return;}
  if(!config.dry&&config.action==='like'&&!config.reaction.endsWith('Like')){try{const granted=await chrome.permissions.contains({permissions:['debugger']});if(!granted){disarm();notice('Love and other non-Like reactions need native mouse input permission. Reload or reinstall the updated extension. No task started.');return;}}catch(e){disarm();notice('Native mouse input permission: '+e.message);return;}}
  disarm();$('start').disabled=true;notice('Starting… using your Facebook task tab. '+(config.dry?'Preview: no engagement actions will be sent.':'Live task enabled.'));const ok=await send('start',{config});await render();
  // The task runs in the site tab, so the small popup is no longer needed: close it.
@@ -107,7 +108,7 @@ const ACTION_NAMES={like:'React to',follow:'Follow',unfollow:'Unfollow',comment:
 // ---- live target check ----
 function targetMode(){const a=$('action').value;return a==='join'?'groups':['follow','unfollow','friend'].includes(a)?'users':$('mode').value;}
 function parseTargets(){
- const raw=$('target').value.trim(),res={ok:[],bad:[],raw};if(!raw)return res;
+ if(targetMode()==='home')return{ok:['your home feed'],bad:[],raw:'home'};const raw=$('target').value.trim(),res={ok:[],bad:[],raw};if(!raw)return res;
  if(typeof AuroraEngine==='undefined')return{...res,skip:true};
  const mode=targetMode();
  for(const t of [...new Set(raw.split(/[,\n]+/).map(s=>s.trim()).filter(Boolean))]){try{const r=AuroraEngine.resolve(t,mode);if(r)res.ok.push(r.label);}catch(e){res.bad.push({raw:t,why:e.message});}}
@@ -129,7 +130,7 @@ function paintSummary(){
  const verb=action==='like'?'React ('+String($('reaction').value).replace(/^[^A-Za-z]+/,'')+') to':ACTION_NAMES[action];
  const el=$('startSummary');el.className='summary '+(dry?'is-preview':'is-live');el.textContent='';
  const tag=document.createElement('b');tag.textContent=dry?'PREVIEW':'LIVE';
- el.append(tag,' · '+verb+' '+(n?n+' target'+(n===1?'':'s'):'—  add a target to begin')+(n&&post&&!direct?' · up to '+perUser+' each':'')+' · every ~'+delay+'s'+(eta?' · '+eta:''));
+ el.append(tag,' · '+verb+' '+($('mode').value==='home'&&!['follow','unfollow','friend','join'].includes(action)?'your home feed':n?n+' target'+(n===1?'':'s'):'—  add a target to begin')+(n&&post&&!direct?' · up to '+perUser+' each':'')+' · every ~'+delay+'s'+(eta?' · '+eta:''));
  $('paceSum').textContent=(post&&!direct?perUser+' per target · ':'')+'limit '+limit+' · every '+delay+'s · cap '+(cap>0?cap:'off');
  const ex=$('exclude').value.split(/[,\n]+/).map(s=>s.trim()).filter(Boolean).length;$('advSum').textContent=ex?'excluding '+ex:'none set';
 }
