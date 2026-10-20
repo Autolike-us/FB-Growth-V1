@@ -266,3 +266,39 @@ html,body{overflow-x:hidden}
 .support{display:grid;gap:4px;margin:10px 0}.support a{color:var(--accent);font-size:12px;text-decoration:none}.support a:hover{text-decoration:underline}
 footer a{color:var(--accent)}
 .popup .support{display:flex;gap:10px;margin:0 6px 0 0;flex-wrap:wrap}
+
+/* 2.0 look begin */
+body{--navmark:none;--edge:0 14px 24px -12px rgba(24,119,242,.8);}
+/* ===== 2.0 look — flatter cards, calmer sidebar, four stats. Colours come from the theme variables above. ===== */
+body{font-family:"Inter","Segoe UI Variable","Segoe UI",system-ui,-apple-system,sans-serif;font-size:14.5px;line-height:1.55;background:var(--bg);background-attachment:fixed}
+aside{width:240px;background:var(--solid);backdrop-filter:none;padding:26px 16px}
+aside small{font-size:9px;margin-top:6px}
+.brand{font-size:26px}
+nav{margin-top:30px;gap:4px}
+nav button,nav .navlink{display:block;width:100%;text-align:left;border:0;background:transparent;border-radius:11px;padding:10px 14px;color:var(--muted);font-weight:650;font-size:14px;text-decoration:none;transform:none}
+nav button:hover,nav .navlink:hover{background:var(--tint);color:var(--ink);box-shadow:none;transform:none}
+nav button.selected{background:var(--tint);color:var(--accent);box-shadow:var(--navmark,none)}
+.aside-bottom{padding-top:14px}
+main{margin-left:240px;padding:34px 4%;max-width:1480px}
+h1{font-size:29px;letter-spacing:-.8px;margin:8px 0 6px}
+button{border-radius:11px;padding:9px 16px}
+.primary{box-shadow:var(--edge,0 10px 22px -12px var(--accent))}
+.primary:hover:not(:disabled){box-shadow:var(--edge,0 14px 26px -12px var(--accent))}
+input:not([type=checkbox]),select,textarea{border-radius:11px;padding:10px 12px}
+.stats{grid-template-columns:repeat(4,1fr);gap:14px;margin:24px 0}
+.stats article,.card{background:var(--solid);backdrop-filter:none;border-radius:14px;padding:18px 20px;box-shadow:0 1px 2px rgba(20,20,30,.05)}
+.stats article::after{display:none}
+.stats article:nth-child(4)::before{content:"📅"}
+.stats article::before{right:16px;top:14px;font-size:20px;opacity:.9}
+.stats strong{font-size:27px}
+.stats small{font-weight:650}
+#status{font-size:15px;padding:3px 12px}
+.grid{gap:18px}
+.card-head h2{font-size:17px}
+.note{border-radius:14px;padding:20px 22px}
+.banner{border-radius:14px}
+.firstrun,.licensebar{border-radius:14px}
+.firstrun{border-color:var(--border);background:var(--tint)}
+.lic-form a,.linkbtn,.licensebar a{color:var(--accent)}
+@media(max-width:1000px){aside{width:180px}main{margin-left:180px}.stats{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:600px){main{margin:0}.stats{grid-template-columns:repeat(2,1fr)}}

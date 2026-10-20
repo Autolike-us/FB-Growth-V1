@@ -63,7 +63,7 @@ async function sendStep(job,step){
  try{return await chrome.tabs.sendMessage(job.tabId,msg);}
  catch(err){
   await dlog('warn','Page script not reachable, re-attaching it',String(err?.message||err));
-  try{await chrome.scripting.executeScript({target:{tabId:job.tabId},files:['selectors.js','engine.js','dom.js','content.js']});return await chrome.tabs.sendMessage(job.tabId,msg);}
+  try{await chrome.scripting.executeScript({target:{tabId:job.tabId},files:['selectors.js','engine.js','dom.js','comments.js','content.js']});return await chrome.tabs.sendMessage(job.tabId,msg);}
   catch(err2){throw Error('Facebook content script is unavailable. Refresh the task tab and resume.'+(err2?.message?' ('+String(err2.message).slice(0,120)+')':''));}
  }
 }

@@ -10,3 +10,11 @@ test('bad numbers, reactions and empty comments fail',()=>{for(const x of [{dela
 
 test('photo viewers retain their route instead of becoming text-post permalinks',()=>{assert.equal(S.postURL('https://www.facebook.com/photo.php?fbid=123&set=a.9&type=3&comment_id=7'),'https://www.facebook.com/photo.php?fbid=123&set=a.9&type=3');assert.equal(S.pageKey('https://www.facebook.com/photo/?fbid=123'), 'post:123');assert.equal(S.postURL('https://www.facebook.com/alice?fbid=123'),null);});
 test('a bare numeric page ID resolves to profile.php?id=',()=>{assert.equal(E.initial(cfg({mode:'users',target:'100067439378570'}))[0].url,'https://www.facebook.com/profile.php?id=100067439378570');assert.equal(E.initial(cfg({mode:'users',target:'https://www.facebook.com/profile.php?id=100067439378570'}))[0].url,'https://www.facebook.com/profile.php?id=100067439378570');});
+
+test('home feed needs no target and plans one feed step',()=>{
+ const c=E.config(cfg({mode:'home',target:'',action:'like'}));
+ const s=JSON.parse(JSON.stringify(E.initial(c)));
+ assert.deepEqual(s,[{url:'https://www.facebook.com/',label:'your home feed',kind:'feed'}]);
+ assert.throws(()=>E.config(cfg({mode:'home',target:'',action:'follow'})),/home feed|users|explicit/i);
+ assert.equal(S.pageKey('https://www.facebook.com/?sk=h_chr'),'home');
+});

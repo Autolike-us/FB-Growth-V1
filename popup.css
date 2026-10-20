@@ -1,0 +1,48 @@
+/* Aurora toolbar popup (slim). The full studio is dashboard.html. Colours follow the studio's own theme. */
+*{box-sizing:border-box}
+body{--bg:#fff;--solid:#fff;--ink:#1c1e21;--muted:#65676b;--border:rgba(24,119,242,.16);--accent:#1877f2;--tint:rgba(24,119,242,.09);--grad:linear-gradient(135deg,#1877f2,#0a5bd3);--bar:linear-gradient(90deg,#42b72a,#1877f2);--bad:#fa383e;--edge:0 10px 20px -10px rgba(24,119,242,.7);
+  --ok:#12a594;--warn:#f59e0b;
+  width:360px;margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 "Inter","Segoe UI Variable","Segoe UI",system-ui,-apple-system,sans-serif}
+body.dark{--bg:#18191a;--solid:#242526;--ink:#e4e6eb;--muted:#b0b3b8;--border:rgba(255,255,255,.10);--tint:rgba(24,119,242,.16);}
+button{font:inherit;cursor:pointer;border:1px solid var(--border);border-radius:11px;background:var(--solid);color:inherit;padding:10px 14px;font-weight:650}
+button:hover:not(:disabled){border-color:var(--accent)}
+button:disabled{opacity:.42;cursor:default}
+button:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+[hidden]{display:none!important}
+.hd{display:flex;align-items:center;justify-content:space-between;padding:15px 18px;border-bottom:1px solid var(--border)}
+.brand{font-size:22px;font-weight:850;letter-spacing:-.3px;color:#1877f2}
+.bd{padding:15px 18px 14px;display:grid;gap:12px}
+.chip{display:inline-block;border-radius:999px;padding:3px 11px;font-size:12px;font-weight:700;background:var(--tint);color:var(--accent);white-space:nowrap}
+.chip.run,.chip.ok{background:rgba(18,165,148,.15);color:var(--ok)}
+.chip.bad{background:rgba(250,56,62,.14);color:var(--bad)}
+.chip.warn{background:rgba(245,158,11,.16);color:#a16207}
+body.dark .chip.warn{color:#fbbf24}
+body[data-status=paused] #chip{animation:pulse 1.6s ease-in-out infinite}
+.card{background:var(--solid);border:1px solid var(--border);border-radius:14px;padding:13px 14px}
+.k{font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);font-weight:650}
+.title{margin:6px 0 9px;font-weight:650;overflow-wrap:anywhere}
+.bar{height:9px;border-radius:999px;background:var(--tint);overflow:hidden}
+.bar i{display:block;height:100%;width:0;border-radius:999px;background:var(--bar);transition:width .4s}
+.meta{display:flex;justify-content:space-between;gap:8px;margin-top:7px;font-size:12.5px;color:var(--muted)}
+.meta:empty{display:none}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.danger{color:var(--bad);border-color:rgba(250,56,62,.32)}
+.danger:hover:not(:disabled){border-color:var(--bad)}
+.today{display:flex;align-items:baseline;gap:8px;margin:4px 0 8px}
+#todayN{font-size:26px;font-weight:800;line-height:1}
+#todayOf{color:var(--muted);font-size:13px}
+.row{display:flex;justify-content:space-between;align-items:center;gap:8px;min-height:24px}
+.mode{font-size:12.5px;color:var(--muted)}
+.primary{background:var(--grad);color:#fff;border:0;padding:12px 14px;font-size:14.5px;box-shadow:var(--edge)}
+.primary:hover:not(:disabled){filter:brightness(1.06)}
+.primary.attention{animation:pulse 1.4s ease-in-out infinite}
+.alert{border-radius:12px;padding:10px 12px;font-size:13px;display:grid;gap:2px}
+.alert.bad{background:rgba(250,56,62,.09);border:1px solid rgba(250,56,62,.35)}
+.alert.bad b{color:var(--bad)}
+.alert.ok{background:rgba(18,165,148,.1);border:1px solid rgba(18,165,148,.35)}
+.alert.ok b{color:var(--ok)}
+.alert span{color:var(--ink);opacity:.85;overflow-wrap:anywhere}
+footer{font-size:11px;color:var(--muted);text-align:center}
+footer a{color:var(--muted)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.6}}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
