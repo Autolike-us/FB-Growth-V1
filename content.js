@@ -106,15 +106,20 @@ async function commentPost(root0,key,c,id){
  if(D.fieldText(field).trim())throw Error('Comment box already contains a draft. Clear it manually before resuming.');
  const {receipts={}}=await chrome.storage.local.get('receipts');if(receipts[key])return{message:'Skipped: comment previously attempted. No duplicate sent.'};
  const want=c.comment.replace(/\s*[\r\n]+\s*/g,' ').trim(),norm=t=>String(t||'').replace(/\s+/g,' ');
- const hasText=()=>D.commentRows(root()).some(r=>r.innerText?.includes(want))||norm(root()?.innerText).includes(want)&&!D.fieldText(D.field(root())||{value:''}).trim();
- if(D.commentRows(root()).some(r=>r.innerText?.includes(want)))return{message:'Skipped: matching comment already visible.'};
+ // Facebook hides decoy characters inside text. So besides the exact text, also compare only what a person can see, ignoring case, spacing, punctuation and emoji.
+ const vis=el=>{if(!el)return'';const out=[],w=document.createTreeWalker(el,NodeFilter.SHOW_TEXT|NodeFilter.SHOW_ELEMENT);for(let n;(n=w.nextNode());){if(n.nodeType===1){if(n.tagName==='BR'||getComputedStyle(n).display!=='inline')out.push(' ');continue;}let hide=false;for(let q=n.parentElement;q;q=q.parentElement){if(q.getAttribute&&q.getAttribute('aria-hidden')==='true'){hide=true;break;}const cs=getComputedStyle(q);if(cs.display==='none'||cs.visibility==='hidden'||parseFloat(cs.opacity)<.05||parseFloat(cs.fontSize)<1||(cs.position==='absolute'&&(/rect\(\s*0/.test(cs.clip)||/inset\(/.test(cs.clipPath||'')||(parseFloat(cs.width)<=2&&parseFloat(cs.height)<=2)))){hide=true;break;}if(q===el)break;}if(!hide){try{const r=document.createRange();r.selectNodeContents(n);const b=r.getBoundingClientRect();if(b.width<1||b.height<1)hide=true;}catch{}}if(!hide)out.push(n.nodeValue);}return out.join('');};
+ const fold=t=>String(t||'').normalize('NFKC').toLowerCase().replace(/[^\p{L}\p{N}]+/gu,''),fw=fold(want);
+ const seenIn=el=>fw.length>=4&&fold(vis(el)).includes(fw); // under 4 letters/digits (for example only emoji) is too short to compare safely: only the exact-text checks apply
+ const countIn=el=>{if(fw.length<4||!el)return 0;const t=fold(vis(el));let n=0,i=-1;while((i=t.indexOf(fw,i+1))>=0)n++;return n;};
+ const hasText=()=>D.commentRows(root()).some(r=>r.innerText?.includes(want)||seenIn(r))||(norm(root()?.innerText).includes(want)||seenIn(root()))&&!D.fieldText(D.field(root())||{value:''}).trim();
+ if(D.commentRows(root()).some(r=>r.innerText?.includes(want)||seenIn(r)))return{message:'Skipped: matching comment already visible.'};
  await active(id);await wait(900+Math.random()*1300);
  T('Typing comment');await D.typeHuman(field,want,()=>active(id));
  if(D.fieldText(field).trim()!==want)throw Error('Comment did not type correctly. Nothing submitted.');
  await wait(600+Math.random()*900);
  // Also confirm when the editor emptied and the text now appears one more time on the page than before (the comment can render outside the post box).
- const occ=t=>(document.body.innerText.split(want).length-1)-(t?(D.fieldText(t).split(want).length-1):0),before=occ(field),emptied=()=>!field.isConnected||!D.fieldText(field).trim();
- return perform(key,id,async()=>{const submit=D.submitFor(field);T('Send via',submit?'button '+D.text(submit):'Enter key');await active(id);if(submit)submit.click();else{for(const type of ['keydown','keypress','keyup'])field.dispatchEvent(new KeyboardEvent(type,{key:'Enter',code:'Enter',keyCode:13,which:13,bubbles:true,cancelable:true}));}},()=>(hasText()&&(!D.field(root())||!D.fieldText(D.field(root())).trim()))||(emptied()&&occ(null)>before),'Posted your comment.');
+ const occ=t=>(document.body.innerText.split(want).length-1)-(t?(D.fieldText(t).split(want).length-1):0),before=occ(field),occF=t=>countIn(root())-(t&&fw.length>=4&&fold(D.fieldText(t)).includes(fw)?1:0),beforeF=occF(field),emptied=()=>!field.isConnected||!D.fieldText(field).trim();
+ return perform(key,id,async()=>{const submit=D.submitFor(field);T('Send via',submit?'button '+D.text(submit):'Enter key');await active(id);if(submit)submit.click();else{for(const type of ['keydown','keypress','keyup'])field.dispatchEvent(new KeyboardEvent(type,{key:'Enter',code:'Enter',keyCode:13,which:13,bubbles:true,cancelable:true}));}},()=>(hasText()&&(!D.field(root())||!D.fieldText(D.field(root())).trim()))||(emptied()&&(occ(null)>before||occF(null)>beforeF)),'Posted your comment.');
 }
 async function sharePost(root,key,c,id){
  const shares=D.ownControls(root()).filter(e=>/^(Share|Share this post|Share reel|Share, send this to friends|Send this to friends)/i.test(D.text(e)));
