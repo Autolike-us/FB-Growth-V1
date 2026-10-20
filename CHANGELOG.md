@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.2.0 — A different comment on each post
+- New option under "Comment on posts": **Use a different comment on each post**. Write one comment per line (at least two). Aurora picks one at random for each post and does not repeat a comment until all have been used; the same post always keeps its comment if a step is retried or resumed.
+- Everything else about commenting is unchanged: one comment per post, preview first, nothing is sent until you confirm.
+
 ## 1.1.1 — Comment confirmation fix
 - After posting a comment, Aurora now recognises it even when Facebook hides decoy characters inside the comment text, so it no longer reports "Comment sent but could not confirm it appeared" for a comment that did appear.
 - Nothing about sending changed: Aurora still sends at most one comment per post, and it still says "could not confirm" when nothing was actually posted.

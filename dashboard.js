@@ -1,4 +1,4 @@
-const $=id=>document.getElementById(id); const fields=['action','reaction','comment','mode','target','perUser','limit','delay','dailyCap','exclude','dry'];
+const $=id=>document.getElementById(id); const fields=['action','reaction','comment','commentMany','mode','target','perUser','limit','delay','dailyCap','exclude','dry'];
 const hints={users:'Exact usernames or full page/profile links, separated by commas or new lines. Search names are not accepted.',groups:'Exact group IDs, slugs or full /groups/ links, separated by commas or new lines.',hashtag:'One hashtag (like #travel) or its hashtag link.',posts:'Full post links, separated by commas or new lines.',reels:'Full reel or video links, separated by commas or new lines.',market:'A search word (like bike). Visits the Marketplace search for it.'};
 function settings(){const o=Object.fromEntries(fields.map(k=>[k,$(k).type==='checkbox'?$(k).checked:$(k).value]));return o;}
 let licenseOk=true,jobActive=false;const canRun=()=>licenseOk||$('dry').checked,refreshStart=()=>{$('start').disabled=jobActive||!canRun();};
@@ -8,7 +8,8 @@ function updateForm(){
  const action=$('action').value;
  for(const option of $('mode').options)option.disabled=option.value==='market'||(action==='join'&&option.value!=='groups')||(['follow','unfollow','friend'].includes(action)&&option.value!=='users');
  if(action==='join')$('mode').value='groups';if(['follow','unfollow','friend'].includes(action))$('mode').value='users';if($('mode').selectedOptions[0]?.disabled)$('mode').value='users';
- $('commentGroup').hidden=action!=='comment';$('comment').required=action==='comment';$('reactionGroup').hidden=action!=='like';
+ $('commentGroup').hidden=action!=='comment';$('comment').required=action==='comment';
+ {const cm=$('comment'),many=$('commentMany').checked;cm.dataset.max=cm.dataset.max||cm.maxLength;cm.maxLength=many?6000:+cm.dataset.max;cm.placeholder=many?'One comment per line — for example:\nLove this!\nSuch a great shot\nThanks for sharing':'Write the exact comment you want posted';const h=$('commentGroup').querySelector('.hint');h.dataset.one=h.dataset.one||h.textContent;h.textContent=many?'Each post gets one of the comments above (one per line), chosen at random. Aurora still attempts at most one comment per post.':h.dataset.one;}$('reactionGroup').hidden=action!=='like';
  $('actionHint').textContent={like:'Reacts to each discovered post. Pick which reaction below.',follow:'Follows each explicit page or profile.',unfollow:'Unfollows only pages/profiles you explicitly enter.',comment:'Posts your exact comment text; uncertain submissions are never retried.',friend:'Requests friendship with explicit profiles; pending requests are skipped.',join:'Joins explicit groups; membership questions/rules require your review.',share:'Shares posts to your feed using Facebook’s current default audience.'}[action];
  $('hint').textContent=hints[$('mode').value];
  // Hide what this action does not use.
@@ -21,7 +22,7 @@ function updateForm(){
  paintMode();
  $('target').placeholder={users:'cafe.lovers, Jane Doe, or a page link',groups:'Group name or link',hashtag:'#travel',posts:'Full post links',reels:'Full reel or video links',market:'bike'}[$('mode').value];
 }
-$('mode').onchange=()=>{disarm();updateForm();};$('action').onchange=()=>{disarm();updateForm();rememberForm();};
+$('mode').onchange=()=>{disarm();updateForm();};$('commentMany').addEventListener('change',()=>{disarm();updateForm();});$('action').onchange=()=>{disarm();updateForm();rememberForm();};
 let armed=null;
 const startLabel=()=>$('dry').checked?'✦ Start preview':'✦ Start live task';
 function disarm(){clearTimeout(armed);armed=null;$('start').textContent=startLabel();}
