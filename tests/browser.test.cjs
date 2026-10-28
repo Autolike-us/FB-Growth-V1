@@ -275,24 +275,24 @@ check('browser fixtures produce no uncaught page errors',!errors.length);await p
  // floating bubble on Facebook pages (its shadow root is closed in production; opened here for inspection)
  const bctx=await browser.newContext(),bp=await bctx.newPage();bp.on('pageerror',e=>{throw e;});
  await bp.setContent('<html lang="en"><body></body></html>');
- await bp.evaluate(()=>{const o=Element.prototype.attachShadow;Element.prototype.attachShadow=function(i){return o.call(this,{...i,mode:'open'});};const store={job:{status:'running',done:3,config:{limit:10,action:'like'},queue:[{}]}};window.__sent=[];window.__listeners=[];window.chrome={storage:{local:{get:async()=>({job:store.job})},onChanged:{addListener:f=>window.__listeners.push(f)}},runtime:{getManifest:()=>({version:'9.9.9'}),sendMessage:async m=>{window.__sent.push(m);return{ok:true,message:'ok'};}}};});
+ await bp.evaluate(()=>{const o=Element.prototype.attachShadow;Element.prototype.attachShadow=function(i){return o.call(this,{...i,mode:'open'});};const store={job:{status:'running',done:3,config:{limit:10,action:'like'},queue:[{}]}};window.__sent=[];window.__fire=(...a)=>window.__listeners.forEach(f=>f(...a));window.__listeners=[];window.chrome={storage:{local:{get:async()=>({job:store.job})},onChanged:{addListener:f=>window.__listeners.push(f)}},runtime:{getManifest:()=>({version:'9.9.9'}),sendMessage:async m=>{window.__sent.push(m);return{ok:true,message:'ok'};}}};});
  await bp.addScriptTag({content:read('panel.js')});await bp.waitForTimeout(300);
  const sh=()=>bp.evaluateHandle(()=>document.getElementById('aurora-panel-host').shadowRoot);
  const txt=async id=>(await sh()).evaluate((r,id)=>r.getElementById(id).textContent,id),hid=async id=>(await sh()).evaluate((r,id)=>r.getElementById(id).hidden,id);
  check('bubble shows progress while running',/Aurora · 3\/10/.test(await txt('toggle')));
  check('quick Pause button shows next to the bubble while running',!await hid('quickPause')&&/Pause/.test(await txt('quickPause')));
  await (await sh()).evaluate(r=>r.getElementById('quickPause').click());await bp.waitForTimeout(100);check('quick Pause sends pause',await bp.evaluate(()=>window.__sent.some(m=>m.action==='pause')));
- await bp.evaluate(()=>window.__listeners.forEach(f=>f({job:{newValue:{status:'paused',done:3,config:{limit:10},queue:[{}],message:'x'}}},'local')));
+ await bp.evaluate(()=>window.__fire({job:{newValue:{status:'paused',done:3,config:{limit:10},queue:[{}],message:'x'}}},'local'));
  check('while paused the quick button becomes Resume',!await hid('quickPause')&&/Resume/.test(await txt('quickPause')));
  await (await sh()).evaluate(r=>r.getElementById('quickPause').click());await bp.waitForTimeout(100);check('quick Resume sends resume',await bp.evaluate(()=>window.__sent.some(m=>m.action==='resume')));
- await bp.evaluate(()=>window.__listeners.forEach(f=>f({job:{newValue:{status:'completed',config:{limit:10}}}},'local'));check('quick button hides when nothing is running',await hid('quickPause')));
+ await bp.evaluate(()=>window.__fire({job:{newValue:{status:'completed',config:{limit:10}}}},'local'));check('quick button hides when nothing is running',await hid('quickPause'));
  // panel redesign: shows only what applies, mode badge, countdown, skip
- await bp.evaluate(()=>window.__listeners.forEach(f=>f({job:{newValue:null}},'local')));
+ await bp.evaluate(()=>window.__fire({job:{newValue:null}},'local'));
  check('idle panel shows the preview form, a PREVIEW badge and no task controls',!await hid('idle')&&await hid('controls')&&/PREVIEW/.test(await txt('chip')));
- await bp.evaluate(()=>window.__listeners.forEach(f=>f({job:{newValue:{status:'running',done:2,message:'Reading Facebook',config:{dry:false,limit:10,action:'follow'},total:4,finished:[{label:'a',state:'done'}],queue:[{label:'itvnews',kind:'account'}],nextAt:Date.now()+12000}}},'local')));
+ await bp.evaluate(()=>window.__fire({job:{newValue:{status:'running',done:2,message:'Reading Facebook',config:{dry:false,limit:10,action:'follow'},total:4,finished:[{label:'a',state:'done'}],queue:[{label:'itvnews',kind:'account'}],nextAt:Date.now()+12000}}},'local'));
  check('running panel hides the preview form, shows Pause and Stop but not Resume or Skip, with a LIVE badge',await hid('idle')&&!await hid('controls')&&!await hid('pause')&&await hid('resume')&&await hid('skip')&&!await hid('stop')&&/LIVE/.test(await txt('chip')));
  check('running panel shows target position and a countdown',/Target 2 of 4 · itvnews · next in 1[0-2]s/.test(await txt('now')));
- await bp.evaluate(()=>window.__listeners.forEach(f=>f({job:{newValue:{status:'paused',done:2,message:'Group needs questions',config:{dry:false,limit:10,action:'join'},total:4,finished:[{label:'a',state:'done'}],queue:[{label:'grp1',kind:'account'},{label:'grp2',kind:'account'}]}}},'local')));
+ await bp.evaluate(()=>window.__fire({job:{newValue:{status:'paused',done:2,message:'Group needs questions',config:{dry:false,limit:10,action:'join'},total:4,finished:[{label:'a',state:'done'}],queue:[{label:'grp1',kind:'account'},{label:'grp2',kind:'account'}]}}},'local'));
  check('paused panel shows the alert, Resume, Skip, Stop and the error-report button',!await (async()=>(await sh()).evaluate(r=>r.getElementById('alert').hidden))()&&!await hid('resume')&&!await hid('skip')&&!await hid('reportRow'));
  await bp.evaluate(()=>{window.__sent.length=0;});await (await sh()).evaluate(r=>r.getElementById('skip').click());await bp.waitForTimeout(100);
  check('panel Skip asks the background to skip the current target',await bp.evaluate(()=>window.__sent.some(m=>m.action==='skipTarget')));
