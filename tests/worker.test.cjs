@@ -74,3 +74,17 @@ test('post to groups (several in one post): a batch that would go over the daily
  await w.send({action:'start',config:pcfg({postHow:'multi',batchSize:4,dailyCap:5,groupList:Array.from({length:4},(_,i)=>({id:'g'+i,name:'Group '+i}))})});await w.run();
  assert.match(w.data.job.message,/Daily cap/);assert.equal(w.data.job.status,'paused');
 });
+
+// ---- Share to groups ----
+const scfg=x=>({action:'shareg',mode:'groups',dry:false,postText:'Fresh out of the oven!',postMode:'assist',delay:120,dailyCap:5,items:[{url:'https://www.facebook.com/reel/111',title:'Sourdough'},{url:'https://www.facebook.com/reel/222',title:'Loaf'}],groupList:[{id:'bakers',name:'Bread Bakers'},{id:'foodies',name:'Local Foodies'}],...x});
+test('share to groups: the tab opens each item, every share counts once, a banned group loses all its shares',async()=>{
+ const w=worker();const seen=[];w.result(m=>{seen.push(m.step.kind+':'+(m.step.itemKey||'')+':'+m.step.gid);if(m.step.kind==='grules')return m.step.gid==='bakers'?{blocked:true,message:'Skipped: rules.'}:{blocked:false,message:'ok'};return{performed:true,message:'Shared.'};});
+ await w.send({action:'start',config:scfg()});await w.run();
+ assert.deepEqual(seen,['grules::bakers','grules::foodies','sharepair:post:111:foodies','sharepair:post:222:foodies']);
+ assert.equal(w.data.job.done,2);assert.equal(w.data.job.counts.shareg,2);assert.equal(w.data.job.skipped,2);assert.equal(w.data.daily.count,2);assert.equal(w.data.job.status,'completed');
+});
+test('share to groups: an assisted share that returns "wait" is asked again until it is done; the daily limit pauses the next one',async()=>{
+ const w=worker();let n=0;w.result(m=>{if(m.step.kind==='grules')return{blocked:false,message:'ok'};n++;return n%2?{wait:'Press Post yourself.'}:{performed:true,message:'Shared.'};});
+ await w.send({action:'start',config:scfg({dailyCap:1,items:[{url:'https://www.facebook.com/reel/111'},{url:'https://www.facebook.com/reel/222'}],groupList:[{id:'foodies',name:'Local Foodies'}]})});await w.run();
+ assert.equal(w.data.job.done,1);assert.match(w.data.job.message,/Daily cap/);assert.equal(w.data.job.status,'paused');
+});

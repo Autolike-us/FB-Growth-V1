@@ -87,7 +87,7 @@ async function tick(){
    job.navigation={target:step.url,attempts:job.navigation?.target===step.url?job.navigation.attempts+1:1};job.message='Opening '+step.url;job.nextAt=Date.now()+2000;await save(job);await dlog('info','Opening '+short(step.url)+(job.navigation.attempts>1?` (attempt ${job.navigation.attempts})`:''));await chrome.tabs.update(job.tabId,{url:step.url,active:true});await schedule(job);return;
   }
 
-  const action=['account','engage','feed','gpost','mpost'].includes(step.kind)&&!job.config.dry;
+  const action=['account','engage','feed','gpost','mpost','sharepair'].includes(step.kind)&&!job.config.dry;
   if(action&&job.config.dailyCap&&await dailyCount()+(step.kind==='mpost'?(step.gids||[]).length:1)>job.config.dailyCap)throw Error(`Daily cap reached (${job.config.dailyCap} actions today). Resume tomorrow or raise the cap in the studio.`);
   job.navigation=null;job.message='Reading Facebook: '+step.kind;await save(job);
   if(action){job.inFlight=true;await save(job);}
@@ -206,6 +206,28 @@ async function loadGroups(dash){
  }catch(e){await dlog('error','Loading groups failed: '+e.message);await put({state:'error',error:e.message,time:Date.now()});}
  finally{try{if(dash?.id){await chrome.tabs.update(dash.id,{active:true});await chrome.windows.update(dash.windowId,{focused:true});}}catch{}}
 }
+// Reads the reels or posts on the person's own profile (to choose what to share). Same idea as loadGroups: runs by itself and brings the studio back.
+async function loadItems(kind,dash){
+ const put=o=>chrome.storage.local.set({gpItemsLoad:{kind,...o}});
+ const urls=kind==='reel'?[base+'me/reels_tab',base+'me/reels/',base+'me/']:[base+'me/'];
+ try{
+  await put({state:'running',n:0,time:Date.now()});
+  let found=null,last=null;
+  for(const url of urls){
+   const tab=await taskTab(url);
+   for(let i=0;i<50;i++){const t=await chrome.tabs.get(tab.id);if(t.status==='complete'&&t.url?.startsWith(base))break;await new Promise(r=>setTimeout(r,500));}
+   await new Promise(r=>setTimeout(r,3500));
+   const ask=()=>chrome.tabs.sendMessage(tab.id,{action:'listItems',kind});let r;
+   try{r=await ask();}catch{try{await chrome.scripting.executeScript({target:{tabId:tab.id},files:['selectors.js','engine.js','dom.js','comments.js','content.js','groupposts.js']});r=await ask();}catch{throw Error('Could not read your profile. Refresh the Facebook tab and try again.');}}
+   if(r?.error)throw Error(r.error);last=r;
+   if(r?.items?.length){found=r;break;}
+  }
+  await dlog('info','Loaded '+(found?.items.length||0)+' '+kind+'s',last?.diag);
+  if(!found)throw Error('No '+(kind==='reel'?'reels':'posts')+' were found on your profile (the page showed '+(last?.diag?.postLinks||0)+' post links). Open your profile yourself to check, or paste the links instead.');
+  await put({state:'done',n:found.items.length,items:found.items,time:Date.now()});
+ }catch(e){await dlog('error','Loading '+kind+'s failed: '+e.message);await put({state:'error',error:e.message,time:Date.now()});}
+ finally{try{if(dash?.id){await chrome.tabs.update(dash.id,{active:true});await chrome.windows.update(dash.windowId,{focused:true});}}catch{}}
+}
 chrome.runtime.onMessage.addListener((m,s,respond)=>{
  if(m.action==='nativeReactionClick'){nativeReactionClick(m,s).then(respond,e=>respond({ok:false,error:e.message,noClick:m.nativeDispatchStarted===false}));return true;}
  const ownPage=[chrome.runtime.getURL('dashboard.html'),chrome.runtime.getURL('popup.html')].includes(s.url?.split(/[?#]/)[0]);
@@ -214,7 +236,12 @@ chrome.runtime.onMessage.addListener((m,s,respond)=>{
  (async()=>{
   if(m.action==='openStudio'){await chrome.tabs.create({url:chrome.runtime.getURL('dashboard.html')});return{ok:true};}
   if(m.action==='previewProfile')m={action:'start',config:{action:'like',reaction:'👍 Like',mode:'users',target:m.target,perUser:3,limit:3,delay:20,dailyCap:0,exclude:'',dry:true}};
-  if(m.action==='gpProgress'){const {gpLoad}=await chrome.storage.local.get('gpLoad');if(gpLoad?.state==='running')await chrome.storage.local.set({gpLoad:{...gpLoad,n:Number(m.n)||0,time:Date.now()}});return{ok:true};}
+  if(m.action==='gpProgress'){const key=m.key==='gpItemsLoad'?'gpItemsLoad':'gpLoad';const cur=(await chrome.storage.local.get(key))[key];if(cur?.state==='running')await chrome.storage.local.set({[key]:{...cur,n:Number(m.n)||0,time:Date.now()}});return{ok:true};}
+  if(m.action==='listItems'){
+   const {job}=await chrome.storage.local.get('job');if(['running','paused'].includes(job?.status))throw Error('Stop or finish the current task first: loading your reels and posts uses the Facebook tab.');
+   if(busy)throw Error('A step is finishing. Try again shortly.');
+   loadItems(m.kind==='reel'?'reel':'post',s.tab);return{ok:true,started:true};
+  }
   if(m.action==='listGroups'){
    const {job}=await chrome.storage.local.get('job');if(['running','paused'].includes(job?.status))throw Error('Stop or finish the current task first: loading your groups uses the Facebook tab.');
    if(busy)throw Error('A step is finishing. Try again shortly.');
@@ -228,7 +255,7 @@ chrome.runtime.onMessage.addListener((m,s,respond)=>{
    if(busy)throw Error('A step is finishing. Try again shortly.');const old=(await chrome.storage.local.get('job')).job;if(['running','paused'].includes(old?.status))throw Error('Stop the current task first.');
    const config=AuroraEngine.config(m.config),queue=AuroraEngine.initial(config);if(!config.dry&&config.action==='like'&&config.reaction!=='Like'&&!await chrome.permissions.contains({permissions:['debugger']}))throw Error('Allow native mouse input in the studio to run this reaction.');if(!queue.length)throw Error('All targets are excluded.');
    await chrome.storage.local.set({config:m.config});const tab=await taskTab(queue[0].url);
-   const job={version:4,id:crypto.randomUUID(),config,queue,total:queue.length,finished:[],tabId:tab.id,status:'running',counts:{like:0,follow:0,unfollow:0,comment:0,friend:0,join:0,share:0,post:0},done:0,liked:0,previewed:0,skipped:0,seen:[],seenUsers:[],nextAt:Date.now()+2000,message:`${config.dry?'Preview':'Live'} ${config.action} task started. Waiting for Facebook.`};
+   const job={version:4,id:crypto.randomUUID(),config,queue,total:queue.length,finished:[],tabId:tab.id,status:'running',counts:{like:0,follow:0,unfollow:0,comment:0,friend:0,join:0,share:0,post:0,shareg:0},done:0,liked:0,previewed:0,skipped:0,seen:[],seenUsers:[],nextAt:Date.now()+2000,message:`${config.dry?'Preview':'Live'} ${config.action} task started. Waiting for Facebook.`};
    await save(job);await log(job.message);await dlog('info',job.message,{action:config.action,reaction:config.reaction,mode:config.mode,target:String(config.target||'').slice(0,200),limit:config.limit,perUser:config.perUser,scanLimit:config.scanLimit,delay:config.delay,dailyCap:config.dailyCap,preview:config.dry,steps:queue.length});await schedule(job);return{ok:true,message:job.message};
   }
 

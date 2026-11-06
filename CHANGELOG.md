@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.4.0 — Share my reels and posts to groups
+- **New: Share to groups** (own menu entry, same page as Post to groups). Choose reels and posts you already published and the groups to send them to. Aurora uses Facebook's own Share → “Share to a group” for each item and group.
+- **Choose what to share**: “My reels” and “My posts” are read from your profile and shown as cards you tick, or use “Paste links” for any reel or post link.
+- **Assisted (recommended) or Automatic**, an optional caption (or a different caption per group written by Aurora Reply), the order of the shares (spread out, or group by group), the same rules check, admin-approval filter, daily limit and pacing as Post to groups.
+- Never shares the same item to the same group twice, remembers what was shared where, and stops on warnings. An uncertain share is never repeated.
+
 ## 1.3.1 — Groups: loading, filters, several-groups post, link previews
 - **Load my groups** now runs in the background, shows how many it has found, and brings this window back to the front by itself when it is done. If nothing is found, it says what it saw so you can send a report.
 - **Several groups in one post**: use Facebook's own “Add groups” (up to 9 groups at a time). Aurora opens the first group's post box, ticks the other groups by name, writes your text once and posts once. Choose how many groups per post.

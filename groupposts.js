@@ -26,7 +26,7 @@ function launcher(){
 }
 const composer=()=>D.dialogs().find(d=>d.querySelector('[contenteditable="true"][role="textbox"],textarea'))||null;
 const boxOf=d=>d&&[...d.querySelectorAll('[contenteditable="true"][role="textbox"],textarea')].find(e=>D.visible(e))||null;
-const postButton=d=>d&&[...d.querySelectorAll('[role="button"],button')].find(b=>D.visible(b)&&/^post$/i.test(D.text(b))&&b.getAttribute('aria-disabled')!=='true'&&!b.disabled)||null;
+const postButton=(d,re=/^post$/i)=>d&&[...d.querySelectorAll('[role="button"],button')].find(b=>D.visible(b)&&re.test(norm(D.text(b)))&&b.getAttribute('aria-disabled')!=='true'&&!b.disabled)||null;
 const boxText=b=>norm(b?('value' in b?b.value:b.textContent):'');
 function clickLike(el){const r=el.getBoundingClientRect(),o={bubbles:true,cancelable:true,composed:true,view:window,clientX:r.left+r.width/2,clientY:r.top+r.height/2,button:0};for(const t of ['pointerover','pointerdown','mousedown','pointerup','mouseup','click']){try{el.dispatchEvent(t.startsWith('pointer')?new PointerEvent(t,{...o,pointerType:'mouse',isPrimary:true}):new MouseEvent(t,o));}catch{}}}
 
@@ -215,6 +215,122 @@ async function post(s,c,H){
  return{performed:true,count:state.count,message:doneMsg(s,o)+(pv==='missing'?' (the link may have posted without a picture card)':'')};
 }
 
+/* ---------- share an existing reel or post to a group (Facebook's own Share → Share to a group) ---------- */
+const SHARE_BTN=/^(share|send this to friends or post it on your profile\.?)$/i;
+function shareButton(){
+ const main=document.querySelector('[role="main"]')||document.body;
+ const c=[...main.querySelectorAll('[role="button"],[aria-label]')].filter(e=>D.visible(e)&&!e.closest('[role="dialog"]')&&!/comment/i.test(e.getAttribute('aria-label')||'')&&SHARE_BTN.test(norm(e.getAttribute('aria-label')||D.text(e))));
+ return c[0]?(c[0].closest('[role="button"]')||c[0]):null;
+}
+const GROUP_OPT=/^(share to a group|share in a group|share to groups?|group|groups)$/i;
+function groupOption(){
+ const sel='[role="dialog"] [role="button"],[role="dialog"] [role="menuitem"],[role="dialog"] [role="listitem"],[role="menu"] [role="menuitem"],[role="menu"] [role="button"],[role="dialog"] span,[role="menu"] span';
+ const e=[...document.querySelectorAll(sel)].find(x=>D.visible(x)&&GROUP_OPT.test(norm(D.text(x))));
+ return e?(e.closest('[role="button"],[role="menuitem"],[role="listitem"]')||e):null;
+}
+const groupPicker=()=>D.dialogs().find(d=>searchBox(d)&&!d.querySelector('[contenteditable="true"][role="textbox"]'))||null;
+function findPick(d,name){
+ const want=norm(name).toLowerCase();let best=null;
+ for(const e of d.querySelectorAll('[role="button"],[role="option"],[role="listitem"],[role="radio"],[role="link"],li,a')){
+  if(!D.visible(e))continue;const first=norm(String(e.innerText||'').split('\n')[0]).toLowerCase();if(!first)continue;
+  if(first===want)return e;if(!best&&(first.includes(want)||want.includes(first)))best=e;
+ }
+ return best;
+}
+const SHARED=/shared|posted|your post|pending|submitted|sent to/i;
+const sstate={key:null,startedAt:0};
+async function shareOutcome(H){
+ for(let t=0;t<15000;t+=500){
+  await H.active(H.id);
+  if(D.dialogs().some(d=>/discard|unsaved|leave/i.test(d.innerText||'')))return{unsure:true};
+  const toast=norm([...document.querySelectorAll('[role="alert"],[role="status"]')].map(e=>e.innerText||'').join(' '));
+  if(SHARED.test(toast))return{shared:true,pending:POSTED_PENDING.test(toast)};
+  await sleep(500);
+ }
+ return{shared:false};
+}
+async function recordShare(s,key,o){
+ const {receipts={}}=await chrome.storage.local.get('receipts');receipts[key]={status:'confirmed',phase:'shared',time:Date.now()};await chrome.storage.local.set({receipts});
+ if(o.pending)await saveFlags(s.gid,{approval:true});
+}
+async function sharePair(s,c,H){
+ const{id,T,active,until}=H;
+ if(!await until(()=>document.querySelector('[role="main"]')||D.scope(),id,15000))throw Error('Facebook did not render this item.');
+ await sleep(1000);
+ const text=norm(s.text||''),key='g:share:'+s.itemKey+':'+s.gid+':'+hash(text),where=s.gname||'the group';
+ const resuming=sstate.key===key;
+ if(!resuming){
+  const {receipts={}}=await chrome.storage.local.get('receipts');
+  if(receipts[key])return{message:`Skipped: this was already shared to ${where}. Nothing sent again.`};
+ }
+ if(c.dry){
+  const b=await until(shareButton,id,8000);
+  if(!b)throw Error('Cannot find the Share button on this item. Check that it can be shared.');
+  return{preview:true,message:`Preview: would share this to ${where}${text?' with your caption':''}. Nothing was shared.`};
+ }
+ if(resuming){
+  if(composer()||groupPicker()||D.dialogs().length){
+   if(Date.now()-sstate.startedAt>MAX_WAIT){sstate.key=null;throw Error(`You did not post the share to ${where} within 15 minutes. Press Resume to continue, or Stop.`);}
+   return{wait:`The share to ${where} is ready. Read it, then press Post yourself. (Close the box to skip.)`};
+  }
+  const o=await shareOutcome(H);
+  if(o.unsure)return{wait:`Finish or discard the box for ${where}…`};
+  sstate.key=null;
+  if(o.shared){await recordShare(s,key,o);return{performed:true,message:o.pending?`Shared to ${where} (the admins must approve it first).`:`Shared to ${where}.`};}
+  return{message:`Skipped ${where}: the box was closed and no share was confirmed.`};
+ }
+ // 1. Share  2. Share to a group  3. pick the group  4. caption
+ const b=await until(shareButton,id,8000);
+ if(!b)throw Error('Cannot find the Share button on this item. Check that it can be shared.');
+ await active(id);D.reveal(b);await sleep(500);clickLike(b);T('Share clicked');
+ const opt=await until(groupOption,id,7000);
+ if(!opt)throw Error('Facebook’s share menu has no “Share to a group” option for this item. Nothing was shared.');
+ await active(id);clickLike(opt);T('Share to a group clicked');
+ const pk=await until(groupPicker,id,8000);
+ if(!pk)throw Error('The group list of the Share window did not open. Nothing was shared.');
+ const sb=searchBox(pk);setSearch(sb,String(s.gname||'').slice(0,40));await sleep(1300);
+ const hit=findPick(groupPicker()||pk,s.gname||'');
+ if(!hit)throw Error(`Could not find the group “${String(s.gname||'').slice(0,40)}” in Facebook’s share list. Nothing was shared.`);
+ await active(id);clickLike(hit);T('group chosen');
+ const d=await until(composer,id,8000);
+ if(!d)throw Error('The share box did not open after choosing the group. Nothing was shared.');
+ if(text){const box=await until(()=>boxOf(composer()),id,5000);if(!box)throw Error('The share box has no caption area. Nothing was shared.');await active(id);if(!await typeOnce(box,text))throw Error('Could not put your caption into the share box. Nothing was shared.');T('caption placed');}
+ sstate.key=key;sstate.startedAt=Date.now();
+ if(c.postMode!=='auto')return{wait:`The share to ${where} is ready${text?' with your caption':''}. Read it, then press Post yourself. (Close the box to skip.)`};
+ await sleep(1200+Math.random()*1600);await active(id);
+ const pb=await until(()=>postButton(composer(),/^(post|share|share now)$/i),id,6000);
+ if(!pb){sstate.key=null;throw Error('The Post button of the Share window is missing or disabled. Nothing was shared.');}
+ const {receipts={}}=await chrome.storage.local.get('receipts');receipts[key]={status:'attempted',phase:'dispatch',time:Date.now()};await chrome.storage.local.set({receipts});
+ await active(id);clickLike(pb);T('Post pressed');
+ for(let t=0;t<20000&&composer();t+=500)await sleep(500);
+ sstate.key=null;
+ if(composer())throw Error(`Post was pressed for ${where} but the box did not close, so the result is unknown. Check Facebook. Aurora will not share it again.`);
+ const o=await shareOutcome(H);
+ if(!o.shared)throw Error(`The share to ${where} was sent but could not be confirmed. Check Facebook. Aurora will not share it again.`);
+ await recordShare(s,key,o);
+ return{performed:true,message:o.pending?`Shared to ${where} (the admins must approve it first).`:`Shared to ${where}.`};
+}
+
+/* ---------- the reels and posts on the person's profile (to choose what to share) ---------- */
+async function listItems(kind,onProgress){
+ const map=new Map();let stale=0;
+ const read=()=>{for(const a of document.querySelectorAll('a[href]')){
+  const pu=S.postURL(a.href);if(!pu)continue;const isReel=/\/reel\/\d+/.test(pu);if(kind==='reel'?!isReel:isReel)continue;
+  const key=S.pageKey(pu);if(map.has(key))continue;
+  const art=a.closest('[role="article"]')||a.parentElement,img=a.querySelector('img')||art?.querySelector('img');
+  const title=norm((String(art?.innerText||'').split('\n').find(l=>l.trim().length>3&&!/^(like|comment|share|\d)/i.test(l.trim()))||a.getAttribute('aria-label')||'')).slice(0,70);
+  map.set(key,{url:pu,kind,title:title||(isReel?'Reel':'Post'),thumb:String(img?.src||'').slice(0,500)});}};
+ const scroller=()=>[document.scrollingElement,...document.querySelectorAll('[role="main"],div')].find(e=>e&&e.scrollHeight>e.clientHeight+200&&/auto|scroll|visible/.test(getComputedStyle(e).overflowY)&&e.clientHeight>300)||document.scrollingElement;
+ for(let i=0;i<30&&stale<4&&map.size<60;i++){const before=map.size;read();stale=map.size===before?stale+1:0;try{onProgress&&onProgress(map.size);}catch{}scroller().scrollBy(0,Math.max(700,innerHeight));window.scrollBy(0,Math.max(700,innerHeight));await sleep(900);}
+ read();
+ const links=[...document.querySelectorAll('a[href]')].filter(a=>S.postURL(a.href));
+ return{items:[...map.values()].slice(0,60),diag:{postLinks:links.length,path:location.pathname}};
+}
+chrome.runtime.onMessage.addListener((m,s,reply)=>{
+ if(m.action!=='listItems'||s.id!==chrome.runtime.id||s.tab)return;
+ listItems(m.kind==='reel'?'reel':'post',n=>{try{chrome.runtime.sendMessage({action:'gpProgress',n,key:'gpItemsLoad'});}catch{}}).then(r=>reply(r),e=>reply({error:e.message}));return true;
+});
+
 /* ---------- the groups the person belongs to ---------- */
 const GENERIC=/^(groups?|see all|create (new )?group|discover|your groups|your feed|joined|manage|notifications?|more|see more|join|\d+)$/i;
 function readGroups(map){
@@ -238,5 +354,5 @@ chrome.runtime.onMessage.addListener((m,s,reply)=>{
  listGroups(n=>{try{chrome.runtime.sendMessage({action:'gpProgress',n});}catch{}}).then(r=>reply(r),e=>reply({error:e.message}));return true;
 });
 
-globalThis.AuroraGroupPost={run(s,c,H){return s.kind==='grules'?rules(s,c,H):post(s,c,H);},readRules,typeOnce,launcher,composer,state,hasPreview};
+globalThis.AuroraGroupPost={run(s,c,H){return s.kind==='grules'?rules(s,c,H):s.kind==='sharepair'?sharePair(s,c,H):post(s,c,H);},readRules,typeOnce,launcher,composer,state,hasPreview};
 })();
