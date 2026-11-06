@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.4.1 — Share button on reels
+- Fixed: on a reel page Aurora could not find the Share button (it can sit outside the main area of the page). It now looks everywhere on the page, and waits a little longer.
+- Fixed: choosing a group in Facebook's “Share to a group” list now clicks the row itself (the innermost button), not its wrapper.
+- If a step still cannot find a button, the error now lists the buttons or options it did see, so a debug report shows what is on the page.
+
 ## 1.4.0 — Share my reels and posts to groups
 - **New: Share to groups** (own menu entry, same page as Post to groups). Choose reels and posts you already published and the groups to send them to. Aurora uses Facebook's own Share → “Share to a group” for each item and group.
 - **Choose what to share**: “My reels” and “My posts” are read from your profile and shown as cards you tick, or use “Paste links” for any reel or post link.

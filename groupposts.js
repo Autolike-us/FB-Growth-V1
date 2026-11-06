@@ -216,26 +216,39 @@ async function post(s,c,H){
 }
 
 /* ---------- share an existing reel or post to a group (Facebook's own Share → Share to a group) ---------- */
-const SHARE_BTN=/^(share|send this to friends or post it on your profile\.?)$/i;
+const SHARE_BTN=/^(share( this)?( reel| post| video)?\.?|send this to friends or post it on your profile\.?)$/i;
+const labelOf=e=>norm(e.getAttribute('aria-label')||D.text(e));
+// Reels and posts put their Share control in different places (not always inside the main area), so look everywhere, main area first.
 function shareButton(){
- const main=document.querySelector('[role="main"]')||document.body;
- const c=[...main.querySelectorAll('[role="button"],[aria-label]')].filter(e=>D.visible(e)&&!e.closest('[role="dialog"]')&&!/comment/i.test(e.getAttribute('aria-label')||'')&&SHARE_BTN.test(norm(e.getAttribute('aria-label')||D.text(e))));
- return c[0]?(c[0].closest('[role="button"]')||c[0]):null;
+ const ok=e=>D.visible(e)&&!e.closest('[role="dialog"]')&&!/comment/i.test(e.getAttribute('aria-label')||'');
+ const all=[...document.querySelectorAll('[role="button"],[aria-label]')].filter(ok);
+ const main=document.querySelector('[role="main"]');
+ const exact=all.filter(e=>SHARE_BTN.test(labelOf(e)));
+ const pick=exact.find(e=>main&&main.contains(e))||exact[0];
+ if(pick)return pick.closest('[role="button"]')||pick;
+ const loose=all.find(e=>/\bshare\b/i.test(labelOf(e))&&!/\d/.test(labelOf(e))&&labelOf(e).length<40);
+ return loose?(loose.closest('[role="button"]')||loose):null;
 }
-const GROUP_OPT=/^(share to a group|share in a group|share to groups?|group|groups)$/i;
+const buttonsSeen=()=>[...new Set([...document.querySelectorAll('[role="button"][aria-label],a[aria-label][role="link"]')].filter(e=>D.visible(e)).map(e=>labelOf(e).slice(0,30)).filter(Boolean))].slice(0,30).join(' | ');
+const GROUP_OPT=/^(share to a group|share in a group|share to groups?)$/i,GROUP_PLAIN=/^(group|groups)$/i;
+const clickable='[role="button"],[role="menuitem"],[role="listitem"],[role="link"],[role="option"],div[tabindex="0"],span';
+// the innermost matching element is the one that receives the click
+function innermost(list){return list.find(m=>!list.some(o=>o!==m&&m.contains(o)))||list[0]||null;}
 function groupOption(){
- const sel='[role="dialog"] [role="button"],[role="dialog"] [role="menuitem"],[role="dialog"] [role="listitem"],[role="menu"] [role="menuitem"],[role="menu"] [role="button"],[role="dialog"] span,[role="menu"] span';
- const e=[...document.querySelectorAll(sel)].find(x=>D.visible(x)&&GROUP_OPT.test(norm(D.text(x))));
- return e?(e.closest('[role="button"],[role="menuitem"],[role="listitem"]')||e):null;
+ const first=e=>norm(String(e.innerText||D.text(e)).split('\n')[0]);
+ let hit=innermost([...document.querySelectorAll(clickable)].filter(e=>D.visible(e)&&GROUP_OPT.test(first(e))));
+ if(!hit){const layer='[role="dialog"],[role="menu"],[role="listbox"]';hit=innermost([...document.querySelectorAll(clickable)].filter(e=>D.visible(e)&&e.closest(layer)&&GROUP_PLAIN.test(first(e))));}
+ return hit?(hit.closest('[role="button"],[role="menuitem"],[role="option"],[role="link"]')||hit):null;
 }
+const optionsSeen=()=>[...new Set([...document.querySelectorAll('[role="dialog"] [role="button"],[role="menu"] *,[role="dialog"] [role="menuitem"]')].filter(e=>D.visible(e)).map(e=>norm(String(e.innerText||'').split('\n')[0]).slice(0,30)).filter(Boolean))].slice(0,20).join(' | ');
 const groupPicker=()=>D.dialogs().find(d=>searchBox(d)&&!d.querySelector('[contenteditable="true"][role="textbox"]'))||null;
 function findPick(d,name){
- const want=norm(name).toLowerCase();let best=null;
+ const want=norm(name).toLowerCase();const exact=[],part=[];
  for(const e of d.querySelectorAll('[role="button"],[role="option"],[role="listitem"],[role="radio"],[role="link"],li,a')){
   if(!D.visible(e))continue;const first=norm(String(e.innerText||'').split('\n')[0]).toLowerCase();if(!first)continue;
-  if(first===want)return e;if(!best&&(first.includes(want)||want.includes(first)))best=e;
+  if(first===want)exact.push(e);else if(first.includes(want)||want.includes(first))part.push(e);
  }
- return best;
+ return innermost(exact)||innermost(part);
 }
 const SHARED=/shared|posted|your post|pending|submitted|sent to/i;
 const sstate={key:null,startedAt:0};
@@ -264,8 +277,8 @@ async function sharePair(s,c,H){
   if(receipts[key])return{message:`Skipped: this was already shared to ${where}. Nothing sent again.`};
  }
  if(c.dry){
-  const b=await until(shareButton,id,8000);
-  if(!b)throw Error('Cannot find the Share button on this item. Check that it can be shared.');
+  const b=await until(shareButton,id,12000);
+  if(!b)throw Error('Cannot find the Share button on this item. Check that it can be shared. Buttons seen: '+buttonsSeen());
   return{preview:true,message:`Preview: would share this to ${where}${text?' with your caption':''}. Nothing was shared.`};
  }
  if(resuming){
@@ -280,11 +293,11 @@ async function sharePair(s,c,H){
   return{message:`Skipped ${where}: the box was closed and no share was confirmed.`};
  }
  // 1. Share  2. Share to a group  3. pick the group  4. caption
- const b=await until(shareButton,id,8000);
- if(!b)throw Error('Cannot find the Share button on this item. Check that it can be shared.');
+ const b=await until(shareButton,id,12000);
+ if(!b)throw Error('Cannot find the Share button on this item. Check that it can be shared. Buttons seen: '+buttonsSeen());
  await active(id);D.reveal(b);await sleep(500);clickLike(b);T('Share clicked');
  const opt=await until(groupOption,id,7000);
- if(!opt)throw Error('Facebook’s share menu has no “Share to a group” option for this item. Nothing was shared.');
+ if(!opt)throw Error('Facebook’s share menu has no “Share to a group” option for this item. Nothing was shared. Options seen: '+optionsSeen());
  await active(id);clickLike(opt);T('Share to a group clicked');
  const pk=await until(groupPicker,id,8000);
  if(!pk)throw Error('The group list of the Share window did not open. Nothing was shared.');
