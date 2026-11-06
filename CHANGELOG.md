@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.4.2 — Share button with a counter
+- Fixed: on reels Facebook labels the Share button with its counter (for example “Share, 22K shares”), which Aurora did not recognise. It does now, and picks the one on screen when the page has several.
+- If Facebook's Share window is already open (for example because you opened it yourself), Aurora carries on from there instead of stopping.
+
 ## 1.4.1 — Share button on reels
 - Fixed: on a reel page Aurora could not find the Share button (it can sit outside the main area of the page). It now looks everywhere on the page, and waits a little longer.
 - Fixed: choosing a group in Facebook's “Share to a group” list now clicks the row itself (the innermost button), not its wrapper.

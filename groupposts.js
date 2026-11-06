@@ -216,18 +216,18 @@ async function post(s,c,H){
 }
 
 /* ---------- share an existing reel or post to a group (Facebook's own Share → Share to a group) ---------- */
-const SHARE_BTN=/^(share( this)?( reel| post| video)?\.?|send this to friends or post it on your profile\.?)$/i;
+// Facebook labels the button with its counter ("Share, 22K shares"), so the count is allowed; "Shared with Public" and "Share now" are not it.
+const SHARE_BTN=/^share(, ?[\d.,]+ ?[kmb]? shares?)?\.?$|^share this( reel| post| video)?\.?$|^send this to friends or post it on your profile\.?$/i;
 const labelOf=e=>norm(e.getAttribute('aria-label')||D.text(e));
-// Reels and posts put their Share control in different places (not always inside the main area), so look everywhere, main area first.
+// A reel page can hold several cards (the one you see and its neighbours): take the Share button nearest to the middle of the screen.
 function shareButton(){
  const ok=e=>D.visible(e)&&!e.closest('[role="dialog"]')&&!/comment/i.test(e.getAttribute('aria-label')||'');
  const all=[...document.querySelectorAll('[role="button"],[aria-label]')].filter(ok);
- const main=document.querySelector('[role="main"]');
+ const dist=e=>{const r=e.getBoundingClientRect();if(!r.width||!r.height)return 1e9;const cx=r.left+r.width/2,cy=r.top+r.height/2,inView=r.bottom>0&&r.top<innerHeight&&r.right>0&&r.left<innerWidth;return Math.hypot(cx-innerWidth/2,cy-innerHeight/2)+(inView?0:1e6);};
+ const best=list=>list.length?list.slice().sort((x,y)=>dist(x)-dist(y))[0]:null;
  const exact=all.filter(e=>SHARE_BTN.test(labelOf(e)));
- const pick=exact.find(e=>main&&main.contains(e))||exact[0];
- if(pick)return pick.closest('[role="button"]')||pick;
- const loose=all.find(e=>/\bshare\b/i.test(labelOf(e))&&!/\d/.test(labelOf(e))&&labelOf(e).length<40);
- return loose?(loose.closest('[role="button"]')||loose):null;
+ const pick=best(exact)||best(all.filter(e=>/^share\b/i.test(labelOf(e))&&!/^share (now|to)\b/i.test(labelOf(e))&&labelOf(e).length<40));
+ return pick?(pick.closest('[role="button"]')||pick):null;
 }
 const buttonsSeen=()=>[...new Set([...document.querySelectorAll('[role="button"][aria-label],a[aria-label][role="link"]')].filter(e=>D.visible(e)).map(e=>labelOf(e).slice(0,30)).filter(Boolean))].slice(0,30).join(' | ');
 const GROUP_OPT=/^(share to a group|share in a group|share to groups?)$/i,GROUP_PLAIN=/^(group|groups)$/i;
@@ -293,10 +293,13 @@ async function sharePair(s,c,H){
   return{message:`Skipped ${where}: the box was closed and no share was confirmed.`};
  }
  // 1. Share  2. Share to a group  3. pick the group  4. caption
- const b=await until(shareButton,id,12000);
- if(!b)throw Error('Cannot find the Share button on this item. Check that it can be shared. Buttons seen: '+buttonsSeen());
- await active(id);D.reveal(b);await sleep(500);clickLike(b);T('Share clicked');
- const opt=await until(groupOption,id,7000);
+ let opt=groupOption(); // Facebook's Share window may already be open (for example from an earlier try): carry on from it
+ if(!opt){
+  const b=await until(shareButton,id,12000);
+  if(!b)throw Error('Cannot find the Share button on this item. Check that it can be shared. Buttons seen: '+buttonsSeen());
+  await active(id);D.reveal(b);await sleep(500);clickLike(b);T('Share clicked');
+  opt=await until(groupOption,id,7000);
+ }else T('Share window already open');
  if(!opt)throw Error('Facebook’s share menu has no “Share to a group” option for this item. Nothing was shared. Options seen: '+optionsSeen());
  await active(id);clickLike(opt);T('Share to a group clicked');
  const pk=await until(groupPicker,id,8000);
