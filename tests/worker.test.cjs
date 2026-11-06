@@ -64,3 +64,13 @@ test('post to groups: an uncertain automatic post pauses and is not retried',asy
  const w=worker();let posts=0;w.result(m=>{if(m.step.kind==='gpost'){posts++;return{error:'Post was sent in X but could not be confirmed. Check the group. Aurora will not post it again.'};}return{blocked:false,message:'ok'};});
  await w.send({action:'start',config:pcfg({postMode:'auto',autoAck:true,dailyCap:5})});await w.run();assert.equal(w.data.job.status,'paused');assert.equal(posts,1);
 });
+test('post to groups (several in one post): one step counts every group it reached, against the limit and the daily cap',async()=>{
+ const w=worker();const seen=[];w.result(m=>{seen.push(m.step.kind+':'+m.step.gids.length);return{performed:true,count:m.step.gids.length,message:'Posted.'};});
+ await w.send({action:'start',config:pcfg({postHow:'multi',batchSize:3,dailyCap:10,groupList:Array.from({length:5},(_,i)=>({id:'g'+i,name:'Group '+i}))})});await w.run();
+ assert.deepEqual(seen,['mpost:3','mpost:2']);assert.equal(w.data.job.done,5);assert.equal(w.data.job.counts.post,5);assert.equal(w.data.daily.count,5);assert.equal(w.data.job.status,'completed');
+});
+test('post to groups (several in one post): a batch that would go over the daily cap is not started',async()=>{
+ const w=worker();w.data.daily={day:new Date().toDateString(),count:3};w.result(()=>({performed:true,count:4,message:'Posted.'}));
+ await w.send({action:'start',config:pcfg({postHow:'multi',batchSize:4,dailyCap:5,groupList:Array.from({length:4},(_,i)=>({id:'g'+i,name:'Group '+i}))})});await w.run();
+ assert.match(w.data.job.message,/Daily cap/);assert.equal(w.data.job.status,'paused');
+});

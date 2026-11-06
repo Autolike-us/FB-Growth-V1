@@ -14,6 +14,9 @@ check('engine: bad input is refused (no text, no groups, too many groups, bad gr
 check('engine: a preview may use a short wait',cfg({dry:true,delay:10}).delay===10);
 {const job={config:cfg(),queue:E.initial(c),skipped:0,finished:[]};const rules=job.queue.shift();const more=E.expand(job,rules,{blocked:true});check('engine: a group whose rules ban promotion loses its post step and counts as skipped',more.length===0&&job.queue.length===2&&job.queue[0].kind==='grules'&&job.skipped===1&&job.finished[0].note==='group rules');
  const job2={config:cfg(),queue:E.initial(c),skipped:0};const r2=job2.queue.shift();E.expand(job2,r2,{blocked:false});check('engine: a group whose rules are fine keeps its post step',job2.queue.length===3&&job2.queue[0].kind==='gpost');}
+c=cfg({postHow:'multi',batchSize:3,groupList:Array.from({length:7},(_,i)=>({id:'g'+i,name:'Group '+i,text:'ignored'}))});q=E.initial(c);
+check('engine: several-groups mode plans one step per batch (the first group opens the box, the rest are ticked by name) and ignores per-group text',q.length===3&&q.every(x=>x.kind==='mpost')&&q[0].gids.join()==='g0,g1,g2'&&q[0].names.join()==='Group 1,Group 2'&&q[2].gids.join()==='g6'&&q[0].text===c.postText);
+check('engine: a batch is at most 9 groups',cfg({postHow:'multi',batchSize:50,groupList:Array.from({length:20},(_,i)=>({id:'g'+i,name:'G'+i}))}).batchSize===9);
 // ---- page: a made-up group page with an editor that draws edits late, like Facebook's ----
 const GROUP=(extra='',member='Joined')=>`<!doctype html><html lang="en"><body><main role="main"><h1>Bread Bakers</h1><div role="button" tabindex="0">${member}</div>
 <div id="launch" role="button" tabindex="0"><span>Write something...</span></div><div role="feed" id="feed"><div role="article"><p>An older post</p></div></div>${extra}</main>
@@ -22,14 +25,14 @@ function draw(ed,pb){ed.textContent=window.model;pb.setAttribute('aria-disabled'
 document.getElementById('launch').addEventListener('click',()=>{if(document.querySelector('[role=dialog]'))return;
  const d=document.createElement('div');d.setAttribute('role','dialog');d.innerHTML='<div role="textbox" contenteditable="true" data-lexical-editor="true" aria-label="Create a public post"></div><div role="button" id="postbtn" aria-disabled="true" tabindex="0">Post</div><div role="button" id="closebtn" tabindex="0">Close</div>';document.body.append(d);
  const ed=d.querySelector('[role=textbox]'),pb=d.querySelector('#postbtn');window.model='';
- ed.addEventListener('input',e=>{const data=e.data;ed.textContent=window.model;setTimeout(()=>{window.model+=data;draw(ed,pb);},80);});
+ ed.addEventListener('input',e=>{const t=e.inputType,data=e.data;ed.textContent=window.model;setTimeout(()=>{if(t==='insertText')window.model+=data;else if(/^delete/.test(t))window.model=window.model.slice(0,-1);draw(ed,pb);},80);});
  ed.addEventListener('paste',e=>{e.preventDefault();const t=e.clipboardData.getData('text/plain');setTimeout(()=>{window.model+=t;draw(ed,pb);},80);});
  pb.addEventListener('click',()=>{if(pb.getAttribute('aria-disabled')==='true')return;window.presses++;const t=window.model;d.remove();setTimeout(()=>{const a=document.createElement('div');a.setAttribute('role','article');a.innerHTML=window.pending?'<p>Your post is pending admin approval</p>':'<p>'+t+'</p>';document.getElementById('feed').prepend(a);},300);});
  d.querySelector('#closebtn').addEventListener('click',()=>d.remove());});
 </script></body></html>`;
 const MOCK=`window.data={job:{id:'test',status:'running'},receipts:{},history:[]};window.listeners=[];
 window.chrome={runtime:{id:'extension',onMessage:{addListener:f=>listeners.push(f)},sendMessage:async()=>({ok:true}),getManifest:()=>({version:'9'})},storage:{local:{get:async k=>{const o={};[].concat(k||[]).forEach(x=>{if(x in data)o[x]=structuredClone(data[x]);});return o;},set:async o=>Object.assign(data,structuredClone(o)),remove:async()=>{}}}};
-const nt=window.setTimeout;window.setTimeout=(f,ms,...a)=>nt(f,ms>1500?Math.min(ms,1500):ms,...a);`;
+const nt=window.setTimeout;window.setTimeout=(f,ms,...a)=>nt(f,Math.min(ms||0,1500)*0.5,...a);`;
 (async()=>{const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH||'/usr/bin/chromium',headless:true,args:['--no-sandbox','--no-proxy-server']});
 try{
  const ctx=await browser.newContext({viewport:{width:1200,height:900}}),pg=await ctx.newPage();pg.on('pageerror',e=>{throw e;});
@@ -71,6 +74,51 @@ try{
  r=await step('grules',{url:'https://www.facebook.com/groups/bakers/about'});check('rules: friendly rules do not block',r.blocked===false);
  await open('<!doctype html><html lang="en"><body><main role="main"><h1>Bread Bakers</h1><div role="article"><p>a long enough page body to count as rendered, a long enough page body to count as rendered, a long enough page body to count as rendered, a long enough page body</p></div></main></body></html>','https://www.facebook.com/groups/bakers/about');
  r=await step('grules',{url:'https://www.facebook.com/groups/bakers/about'});check('rules: a page with no readable rules does not block (and says so)',r.blocked===false&&/could not be read/.test(r.message));
+
+ // flags learned from rules
+ const RULES=t=>`<!doctype html><html lang="en"><body><main role="main"><h1>Bread Bakers</h1><div role="button">Joined</div><div role="article"><p>hi there this is a long enough page body to count as rendered, hi there hi there hi there hi there hi there hi there hi there hi there hi</p></div><h2>Group rules</h2><p>${t}</p></main></body></html>`;
+ await open(RULES('1. Be kind. 2. All posts must be approved by an admin before they appear.'),'https://www.facebook.com/groups/bakers/about');r=await step('grules',{url:'https://www.facebook.com/groups/bakers/about'});
+ check('flags: a group that holds posts for admins is remembered (and a friendly group is not marked as banning promotion)',r.blocked===false&&/held for admin approval/.test(r.message)&&await pg.evaluate(()=>data.gpFlags.bakers.approval===true&&data.gpFlags.bakers.promoBan===false));
+ await open(RULES('No self-promotion. Be kind.'),'https://www.facebook.com/groups/bakers/about');await step('grules',{url:'https://www.facebook.com/groups/bakers/about'});
+ check('flags: a group that bans promotion is remembered as such',await pg.evaluate(()=>data.gpFlags.bakers.promoBan===true));
+ // a post that lands in the admin queue teaches the same thing
+ await open(GROUP('<!--PENDING-->'));await step('gpost');await pg.evaluate(()=>document.getElementById('postbtn').click());await pg.waitForTimeout(500);r=await step('gpost');
+ check('flags: a post that went to the admins marks the group as needing approval',r.performed&&await pg.evaluate(()=>data.gpFlags.bakers.approval===true));
+ // link preview
+ const LINK=GROUP().replace('</script></body></html>',`setInterval(()=>{const d=document.querySelector('[role=dialog]');if(!d)return;const ok=window.NEEDSPACE?/youtu\\.be\\/\\S+ $/.test(window.model):/youtu\\.be/.test(window.model);if(ok&&!d.querySelector('#rm')){const x=document.createElement('div');x.id='rm';x.setAttribute('role','button');x.setAttribute('aria-label','Remove link preview');x.textContent='x';d.append(x);}},40);</script></body></html>`);
+ const YT='Watch our video https://youtu.be/abc123';
+ await open(LINK);r=await step('gpost',{text:YT});check('link preview: a link whose preview shows up by itself is left alone and no tip is added',r.wait&&!/space bar/.test(r.wait)&&(await model()).model===YT);
+ await open(LINK);await pg.evaluate(()=>{window.NEEDSPACE=true;});r=await step('gpost',{text:YT});m=await model();
+ check('link preview: when Facebook only builds the preview after a space, Aurora types one and the preview appears (text still there once)',r.wait&&!/space bar/.test(r.wait)&&m.model.trim()===YT&&await pg.evaluate(()=>!!document.getElementById('rm')));
+ await open(GROUP());r=await step('gpost',{text:YT});check('link preview: if it never appears, the person is told how to fix it (and the text is still in the box once)',r.wait&&/space bar/.test(r.wait)&&(await model()).model.trim()===YT);
+ // Facebook's own "Add groups" (several groups in one post)
+ const MG=`<!doctype html><html lang="en"><body><main role="main"><h1>Bread Bakers</h1><div role="button" tabindex="0">Joined</div>
+<div id="launch" role="button" tabindex="0"><span>Write something...</span></div><div role="feed" id="feed"><div role="article"><p>An older post</p></div></div></main>
+<script>
+window.model='';window.presses=0;window.picked=[];window.names=['Noticias de todo','Datos Curiosos','Mundo Increible','Noticias de Mexico'];
+function draw(){const ed=document.querySelector('[role=textbox]'),pb=document.getElementById('postbtn');if(!ed)return;ed.textContent=window.model;pb.setAttribute('aria-disabled',window.model?'false':'true');}
+function composer(d){d.innerHTML='<div role="button" id="addg" tabindex="0">+ Add groups</div><div role="textbox" contenteditable="true" data-lexical-editor="true" aria-label="Create a public post"></div><div role="button" id="postbtn" aria-disabled="true" tabindex="0">Post</div><div role="button" id="closebtn" tabindex="0">Close</div>';
+ const ed=d.querySelector('[role=textbox]'),pb=d.querySelector('#postbtn');ed.textContent=window.model;draw();
+ ed.addEventListener('input',e=>{const data=e.data;ed.textContent=window.model;setTimeout(()=>{window.model+=data;draw();},80);});
+ pb.addEventListener('click',()=>{if(pb.getAttribute('aria-disabled')==='true')return;window.presses++;const t=window.model;d.remove();setTimeout(()=>{const a=document.createElement('div');a.setAttribute('role','article');a.innerHTML='<p>'+t+'</p>';document.getElementById('feed').prepend(a);},300);});
+ d.querySelector('#closebtn').addEventListener('click',()=>d.remove());d.querySelector('#addg').addEventListener('click',()=>add(d));}
+function add(d){d.innerHTML='<h2>Add groups</h2><input placeholder="Search groups"><div>Select groups</div><div>Post in up to 9 groups that you are in.</div><div id="rows"></div><div role="button" id="done" tabindex="0">Done</div>';
+ const rows=d.querySelector('#rows');for(const n of window.names){const r=document.createElement('div');r.innerHTML='<span>'+n+'</span><div role="checkbox" aria-checked="'+window.picked.includes(n)+'" tabindex="0"></div>';r.addEventListener('click',()=>{const c=r.querySelector('[role=checkbox]'),on=c.getAttribute('aria-checked')!=='true';c.setAttribute('aria-checked',String(on));window.picked=on?window.picked.concat(n):window.picked.filter(x=>x!==n);});rows.append(r);}
+ d.querySelector('input').addEventListener('input',e=>{for(const r of rows.children)r.style.display=r.textContent.toLowerCase().includes(e.target.value.toLowerCase())?'':'none';});
+ d.querySelector('#done').addEventListener('click',()=>composer(d));}
+document.getElementById('launch').addEventListener('click',()=>{if(document.querySelector('[role=dialog]'))return;const d=document.createElement('div');d.setAttribute('role','dialog');document.body.append(d);window.model='';composer(d);});
+</script></body></html>`;
+ const mstep=(over={},cfg={})=>step('mpost',{label:'Bread Bakers +3 more',gid:'bakers',gids:['bakers','g1','g2','g3'],names:['Noticias de todo','Datos Curiosos','Not In The List'],text:TEXT,...over},{postHow:'multi',...cfg});
+ await open(MG);r=await mstep();m=await model();
+ check('several groups: Aurora opens Add groups, ticks the groups by name (searching for them), presses Done, writes the text once, and waits for the person',r.wait&&/2 groups chosen|3 groups chosen/.test(r.wait)&&m.model===TEXT&&m.presses===0&&(await pg.evaluate(()=>window.picked.slice().sort().join('|')))==='Datos Curiosos|Noticias de todo');
+ check('several groups: a name that is not in Facebook’s list is reported, not guessed',/could not find: Not In The List/.test(r.wait));
+ await pg.evaluate(()=>document.getElementById('postbtn').click());await pg.waitForTimeout(500);r=await mstep();
+ check('several groups: after Post, one step counts every group reached and writes a receipt for each',r.performed===true&&r.count===3&&/Posted in Bread Bakers and 2 other groups/.test(r.message)&&await pg.evaluate(()=>['bakers','g1','g2','g3'].every(g=>Object.keys(data.receipts).some(k=>k.startsWith('post:'+g+':')))));
+ await open(MG);r=await mstep({names:['Noticias de todo']},{postMode:'auto'});
+ check('several groups, automatic: presses Post once for all the groups',r.performed===true&&r.count===2&&(await model()).presses===1);
+ await open(MG);r=await mstep({names:['Nope One','Nope Two']});check('several groups: if none of the chosen groups can be found nothing is posted',/None of the chosen groups could be found/.test(r.error||'')&&(await model()).presses===0);
+ await open(GROUP());r=await mstep();check('several groups: if the post box has no Add groups button there is a clear error and nothing is posted',/no “Add groups” button/.test(r.error||''));
+ r=await step('mpost',{label:'Bread Bakers +3 more',gid:'bakers',gids:['bakers','g1','g2','g3'],names:['A','B','C'],text:TEXT},{postHow:'multi',dry:true});check('several groups: a preview only checks the post box and says how many groups it would add',r.preview&&r.count===4&&/add 3 more groups/.test(r.message));
  // group list
  await open('<!doctype html><html lang="en"><body><main role="main"><a href="/groups/feed/">Your feed</a><a href="/groups/discover/">Discover</a><a href="/groups/create/">Create new group</a><a href="https://www.facebook.com/groups/bakers/">Bread Bakers</a><a href="/groups/123456789/">Local Foodies Austin<br>Last active 2 days ago</a><a href="/groups/bakers/">Bread Bakers</a><a href="/groups/joins/">See all</a></main></body></html>','https://www.facebook.com/groups/joins/');
  r=await send({action:'listGroups'});check('group list: real groups are listed once with their names; feed, discover, create and "see all" are ignored',r.groups&&r.groups.length===2&&r.groups[0].id==='bakers'&&r.groups[1].name==='Local Foodies Austin',JSON.stringify(r));
@@ -78,23 +126,47 @@ try{
  // ---- the "Post to groups" tab ----
  const ui=await (await browser.newContext({viewport:{width:1200,height:1000}})).newPage();ui.on('pageerror',e=>{throw e;});
  await ui.setContent(read('dashboard.html').replace(/<script src="[^"]*"><\/script>/g,'').replace(/<link[^>]*stylesheet[^>]*>/,''));
- await ui.evaluate(()=>{const store={};window.prompt=()=>'Local groups';window.__sent=[];window.chrome={storage:{local:{get:async k=>{const o={};[].concat(k||[]).forEach(x=>{if(x in store)o[x]=store[x];});return o;},set:async o=>Object.assign(store,o),remove:async()=>{}},onChanged:{addListener(){}}},runtime:{getManifest:()=>({version:'9.9.9'}),getURL:x=>x,sendMessage:async m=>{window.__sent.push(m);if(m.action==='listGroups')return{ok:true,groups:[{id:'bakers',name:'Bread Bakers'},{id:'123456789',name:'Local Foodies Austin'},{id:'smallbiz',name:'Austin Small Business Owners'},{id:'neighbors',name:'East Side Neighbors'}]};return{ok:true,message:'Started.'};}},permissions:{contains:async()=>true}};});
+ await ui.evaluate(()=>{const store={},ls=[];window.__set=async o=>{const ch={};for(const [k,v] of Object.entries(o)){ch[k]={newValue:v,oldValue:store[k]};store[k]=v;}ls.forEach(f=>f(ch,'local'));};window.prompt=()=>'Local groups';window.__sent=[];window.__groups=[{id:'bakers',name:'Bread Bakers'},{id:'123456789',name:'Local Foodies Austin'},{id:'smallbiz',name:'Austin Small Business Owners'},{id:'neighbors',name:'East Side Neighbors'}];window.chrome={storage:{local:{get:async k=>{const o={};[].concat(k||[]).forEach(x=>{if(x in store)o[x]=store[x];});return o;},set:async o=>window.__set(o),remove:async()=>{}},onChanged:{addListener:f=>ls.push(f)}},runtime:{getManifest:()=>({version:'9.9.9'}),getURL:x=>x,sendMessage:async m=>{window.__sent.push(m);if(m.action==='listGroups'){setTimeout(()=>window.__set({gpLoad:{state:'running',n:2,time:Date.now()}}),20);setTimeout(()=>window.__set({gpLoad:{state:'done',n:4,groups:window.__groups,time:Date.now()}}),80);return{ok:true,started:true};}return{ok:true,message:'Started.'};}},permissions:{contains:async()=>true}};});
  await ui.addStyleTag({content:read('style.css').replace(/@import[^;]*;/g,'')});for(const f of ['selectors.js','engine.js','report.js','dashboard.js','groupsui.js'])await ui.addScriptTag({content:read(f)});await ui.waitForTimeout(500);
  await ui.click('#groupsTab');await ui.waitForTimeout(150);
  check('tab: "Post to groups" opens its own page and hides the studio form',await ui.evaluate(()=>!document.getElementById('groups').hidden&&document.getElementById('studio').hidden));
  check('tab: before loading, it says no groups are loaded and shows no table',await ui.evaluate(()=>!document.getElementById('gpEmpty').hidden&&document.getElementById('gpTable').hidden));
- await ui.click('#gpLoad');await ui.waitForTimeout(300);
- check('tab: Load my groups lists the four groups with their last-post column',await ui.locator('#gpTable tbody tr').count()===4&&/Bread Bakers/.test(await ui.textContent('#gpTable')));
+ check('tab: the delay starts at 2 minutes for Assisted mode',await ui.inputValue('#gpDelay')==='2');
+ await ui.click('#gpLoad');await ui.waitForTimeout(40);
+ check('tab: while loading, the button is disabled and the message shows progress from the background',await ui.isDisabled('#gpLoad')&&/found so far/.test(await ui.textContent('#gpMsg')));
+ await ui.waitForTimeout(250);
+ check('tab: when the background finishes, the groups appear by themselves (no need to guess) and the button is back',await ui.locator('#gpTable tbody tr').count()===4&&/Bread Bakers/.test(await ui.textContent('#gpTable'))&&!(await ui.isDisabled('#gpLoad'))&&/Done: found 4 groups/.test(await ui.textContent('#gpMsg')));
+ await ui.evaluate(()=>__set({gpLoad:{state:'error',error:'No groups were found on the page.',time:Date.now()}}));
+ check('tab: a failed load shows the reason and re-enables the button',/No groups were found/.test(await ui.textContent('#gpMsg'))&&!(await ui.isDisabled('#gpLoad')));
+ await ui.evaluate(()=>__set({gpLoad:{state:'done',n:4,groups:__groups,time:Date.now()}}));
  await ui.click('#gpAll');check('tab: Select all ticks every group and shows the count',await ui.locator('#gpTable input:checked').count()===4&&/4 groups selected/.test(await ui.textContent('#gpCount')));
  await ui.click('#gpNone');await ui.fill('#gpSearch','austin');check('tab: search narrows the list; Select all then ticks only what is shown',await ui.locator('#gpTable tbody tr').count()===2&&(await ui.click('#gpAll'),await ui.locator('#gpTable input:checked').count()===2));
  await ui.fill('#gpSearch','');await ui.locator('#gpTable input[data-g="bakers"]').check();check('tab: groups can also be ticked one by one',/3 groups selected/.test(await ui.textContent('#gpCount')));
  await ui.click('#gpSaveList');await ui.waitForTimeout(100);check('tab: a selection can be saved as a named list and chosen again',await ui.evaluate(()=>[...document.querySelectorAll('#gpLists option')].some(o=>/Local groups \(3\)/.test(o.textContent)))&&(await ui.click('#gpNone'),await ui.selectOption('#gpLists','Local groups'),await ui.locator('#gpTable input:checked').count()===3));
  await ui.fill('#gpText','Fresh sourdough Saturday!');await ui.fill('#gpDelay','10');await ui.fill('#gpCap','2');await ui.waitForTimeout(100);
- const est=await ui.textContent('#gpEst');check('tab: the estimate says how long it takes and, with a daily limit, that it needs a second day',/3 groups/.test(est)&&/limit of 2 posts a day/.test(est)&&/2 days/.test(est),est);
+ const est=await ui.textContent('#gpEst');check('tab: the estimate says how long it takes and, with a daily limit, that it needs a second day',/3 groups/.test(est)&&/limit of 2 groups a day/.test(est)&&/2 days/.test(est),est);
+ await ui.evaluate(()=>__set({gpFlags:{smallbiz:{approval:true,rulesRead:true},neighbors:{promoBan:true,rulesRead:true},bakers:{rulesRead:true}}}));await ui.click('#gpNone');
+ check('tab: what Aurora learned shows next to each group (admin approval, bans promotion, rules read)',/admin approval/.test(await ui.textContent('#gpTable'))&&/bans promotion/.test(await ui.textContent('#gpTable'))&&/rules read/.test(await ui.textContent('#gpTable')));
+ await ui.selectOption('#gpFilter','noapproval');check('tab: the filter can hide groups that need admin approval',await ui.locator('#gpTable tbody tr').count()===3&&!/Small Business/.test(await ui.textContent('#gpTable')));
+ await ui.selectOption('#gpFilter','approval');check('tab: the filter can show only the groups that need admin approval',await ui.locator('#gpTable tbody tr').count()===1&&/Small Business/.test(await ui.textContent('#gpTable')));
+ await ui.selectOption('#gpFilter','nobans');check('tab: the filter can hide groups that ban promotion',await ui.locator('#gpTable tbody tr').count()===3&&!/East Side/.test(await ui.textContent('#gpTable')));
+ await ui.selectOption('#gpFilter','noapproval');await ui.click('#gpAll');check('tab: Select all only ticks what the filter shows',await ui.locator('#gpTable input:checked').count()===3);
+ await ui.selectOption('#gpFilter','all');await ui.click('#gpNone');await ui.locator('#gpTable input[data-g="bakers"]').check();await ui.locator('#gpTable input[data-g="123456789"]').check();await ui.locator('#gpTable input[data-g="smallbiz"]').check();
+ await ui.click('#gpCheck');await ui.waitForTimeout(200);const chk=await ui.evaluate(()=>__sent.filter(m=>m.action==='start').pop());
+ check('tab: "Check rules" starts a preview that posts nothing (rules on, one group at a time, short wait)',chk&&chk.config.dry===true&&chk.config.ignoreRules===false&&chk.config.postHow==='single'&&chk.config.delay===10&&chk.config.groupList.length===3);
+ await ui.click('#groupsTab');await ui.check('input[name=gpHow][value=multi]');
+ check('tab: "Several groups in one post" shows its box, keeps the wording the same for all, and turns off the per-group AI wording',await ui.evaluate(()=>!document.getElementById('gpMulti').hidden&&document.querySelector('input[name=gpVar][value=same]').checked&&document.getElementById('gpWrite').disabled));
+ await ui.fill('#gpBatch','2');await ui.waitForTimeout(100);check('tab: the estimate counts posts, not groups, in that mode',/3 groups in 2 posts of up to 2 groups/.test(await ui.textContent('#gpEst')),await ui.textContent('#gpEst'));
+ await ui.check('#gpDry');await ui.fill('#gpText','Fresh sourdough Saturday!');await ui.click('#gpStart');await ui.waitForTimeout(200);const mm=await ui.evaluate(()=>__sent.filter(m=>m.action==='start').pop());
+ check('tab: the start message says several-groups mode and the batch size, and the engine accepts it',mm.config.postHow==='multi'&&mm.config.batchSize===2&&E.initial(E.config(JSON.parse(JSON.stringify(mm.config)))).length===2);
+ await ui.click('#groupsTab');await ui.check('input[name=gpHow][value=single]');await ui.uncheck('#gpDry');
+ await ui.check('input[name=gpMode][value=assist]');await ui.fill('#gpDelay','7');await ui.check('input[name=gpMode][value=auto]');check('tab: switching to Automatic keeps a delay you typed, but defaults to 5 minutes if you did not',await ui.inputValue('#gpDelay')==='7');
+ await ui.check('input[name=gpMode][value=assist]');await ui.fill('#gpDelay','10');
  await ui.check('input[name=gpMode][value=auto]');check('tab: choosing Automatic shows the account-risk warning',await ui.evaluate(()=>!document.getElementById('gpWarn').hidden));
- await ui.uncheck('#gpDry');await ui.click('#gpStart');check('tab: Automatic will not start until the risk box is ticked',/accept the risk/.test(await ui.textContent('#gpMsg'))&&await ui.evaluate(()=>!__sent.some(m=>m.action==='start')));
- await ui.check('#gpAck');await ui.click('#gpStart');check('tab: a live run asks for a second click to confirm',/Confirm/.test(await ui.textContent('#gpStart'))&&await ui.evaluate(()=>!__sent.some(m=>m.action==='start')));
- await ui.click('#gpStart');await ui.waitForTimeout(200);const st=await ui.evaluate(()=>__sent.find(m=>m.action==='start'));
+ const nStart=()=>ui.evaluate(()=>__sent.filter(m=>m.action==='start').length);let n0=await nStart();
+ await ui.uncheck('#gpDry');await ui.click('#gpStart');check('tab: Automatic will not start until the risk box is ticked',/accept the risk/.test(await ui.textContent('#gpMsg'))&&await nStart()===n0);
+ await ui.check('#gpAck');await ui.click('#gpStart');check('tab: a live run asks for a second click to confirm',/Confirm/.test(await ui.textContent('#gpStart'))&&await nStart()===n0);
+ await ui.click('#gpStart');await ui.waitForTimeout(200);const st=await ui.evaluate(()=>__sent.filter(m=>m.action==='start').pop());
  check('tab: the start message carries the post, the chosen groups with their text, automatic mode, the risk confirmation, the pace and the limit',st&&st.config.action==='post'&&st.config.postMode==='auto'&&st.config.autoAck===true&&st.config.groupList.length===3&&st.config.groupList.every(g=>g.text==='Fresh sourdough Saturday!')&&st.config.delay===600&&st.config.dailyCap===2&&st.config.dry===false&&st.config.ignoreRules===false);
  check('tab: and that configuration is accepted by the engine',(()=>{try{const e=E.config(JSON.parse(JSON.stringify(st.config)));return e.limit===3;}catch(x){console.log(x.message);return false;}})());
  await ui.click('#groupsTab');await ui.check('input[name=gpVar][value=ai]');check('tab: "different wording" shows the Aurora Reply key box and the credit cost',await ui.evaluate(()=>!document.getElementById('gpAi').hidden)&&/Uses 3 credits/.test(await ui.textContent('#gpWriteNote')));

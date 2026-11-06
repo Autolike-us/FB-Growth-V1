@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.3.1 — Groups: loading, filters, several-groups post, link previews
+- **Load my groups** now runs in the background, shows how many it has found, and brings this window back to the front by itself when it is done. If nothing is found, it says what it saw so you can send a report.
+- **Several groups in one post**: use Facebook's own “Add groups” (up to 9 groups at a time). Aurora opens the first group's post box, ticks the other groups by name, writes your text once and posts once. Choose how many groups per post.
+- **Admin approval and promotion rules**: Aurora learns which groups hold posts for admins or ban promotion (while it reads rules, and when a post goes to the admins). The list shows it, and a filter can hide or show those groups. “Check rules of the chosen groups” reads them without posting.
+- **Link previews**: when your post has a link (for example a YouTube video), Aurora waits for Facebook's picture card, nudges it once if it does not appear, and tells you if it still did not show.
+- **Better defaults**: 2 minutes between groups in Assisted mode, 5 minutes in Automatic mode. The daily limit now counts groups.
+
 ## 1.3.0 — Post to groups
 - **New tab "Post to groups"**: write one post, load the groups you belong to, tick all of them or only some (search, "Select all", saved lists), and post to them one at a time.
 - **Assisted mode (recommended)**: Aurora opens each group and puts your text in the post box once; you read it and press Post yourself. Close the box to skip a group.

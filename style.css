@@ -317,3 +317,6 @@ input:not([type=checkbox]),select,textarea{border-radius:11px;padding:10px 12px}
 .gp-ver{display:block;font-weight:600;margin:10px 0 4px;font-size:13px}
 .gp-go{background:var(--grad);color:#fff;border:0;border-radius:12px;padding:11px 22px;font-weight:700;cursor:pointer}.gp-go:disabled{opacity:.5}
 #groupsTab{display:block;width:100%;text-align:left}
+.gp-warnchip.gp-bad{background:rgba(250,56,62,.15);color:#a1141c}.gp-okchip{background:rgba(18,165,148,.15);color:#0b6b57;border-radius:99px;padding:1px 8px;font-size:11px;font-weight:700}
+#gpMulti label{display:block;margin:10px 0 4px;font-weight:600}#gpMulti input{max-width:120px}
+.gp-dim{color:var(--muted);font-size:12.5px}
