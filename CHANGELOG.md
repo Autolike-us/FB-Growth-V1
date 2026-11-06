@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.3.0 — Post to groups
+- **New tab "Post to groups"**: write one post, load the groups you belong to, tick all of them or only some (search, "Select all", saved lists), and post to them one at a time.
+- **Assisted mode (recommended)**: Aurora opens each group and puts your text in the post box once; you read it and press Post yourself. Close the box to skip a group.
+- **Automatic mode**: Aurora presses Post too. It needs you to accept an account-risk notice, waits at least 5 minutes between groups, and allows at most 15 posts a day.
+- **Rules check**: Aurora reads each group's rules first and skips groups that ban promotion (you can turn this off).
+- **Different wording per group** (optional): Aurora Reply writes a separate version for each group, 1 Reply credit each. You can read and edit every version.
+- **Safety**: never posts the same text to the same group twice, stops on captchas, restrictions and warnings, and an uncertain post is never repeated. Preview mode checks the post box and posts nothing.
+- Text only for now. Photos and videos are not attached yet.
+
 ## 1.2.2 — Move or hide the Aurora button
 - **Move it**: drag the floating Aurora button to any corner of the page. Aurora remembers the spot, and the panel opens up or down so it never goes off screen. Double-click the button to put it back.
 - **Hide it**: a small × next to the button hides it. Turn it back on with the checkbox "Show the Aurora button on pages" in the toolbar popup. If a task pauses and needs you, the button still appears so you do not miss it.

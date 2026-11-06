@@ -39,3 +39,28 @@ test('manual successful reaction is counted once and advances without another cl
 
 test('license: with enforcement on and no key, a live task cannot start',async()=>{const w=worker();vm.runInContext('AuroraLicenseConfig.enforce=true',w.ctx);const r=await w.send({action:'start',config:cfg({dry:false})});assert.equal(r.ok,false);assert.match(r.error,/license key/i);assert.ok(!w.data.job);});
 test('license: with enforcement on and no key, a preview task still runs',async()=>{const w=worker();vm.runInContext('AuroraLicenseConfig.enforce=true',w.ctx);const r=await w.send({action:'start',config:cfg()});assert.equal(r.ok,true,r.error);assert.ok(w.data.job);});
+
+// ---- Post to groups ----
+const pcfg=x=>({action:'post',mode:'groups',dry:false,postText:'Fresh sourdough Saturday!',postMode:'assist',delay:600,dailyCap:5,groupList:[{id:'bakers',name:'Bread Bakers'},{id:'foodies',name:'Local Foodies'},{id:'neighbors',name:'East Side Neighbors'}],...x});
+test('post to groups: rules check first, a banned group is skipped, the others are posted and counted, the wait is long',async()=>{
+ const w=worker();const seen=[];w.result(m=>{seen.push(m.step.kind+':'+m.step.gid);if(m.step.kind==='grules')return m.step.gid==='bakers'?{blocked:true,message:'Skipped Bread Bakers: its rules forbid promotion.'}:{blocked:false,message:'Rules fine.'};return{performed:true,message:'Posted in '+m.step.label+'.'};});
+ await w.send({action:'start',config:pcfg()});await w.run();
+ assert.equal(w.data.job.status,'completed');assert.deepEqual(seen,['grules:bakers','grules:foodies','gpost:foodies','grules:neighbors','gpost:neighbors']);
+ assert.equal(w.data.job.done,2);assert.equal(w.data.job.counts.post,2);assert.equal(w.data.job.skipped,1);assert.equal(w.data.daily.count,2);
+});
+test('post to groups: an assisted step that returns "wait" is asked again until the person has posted',async()=>{
+ const w=worker();let n=0;w.result(m=>{if(m.step.kind==='grules')return{blocked:false,message:'ok'};n++;return n<3?{wait:'Your text is in the box. Press Post yourself.'}:{performed:true,message:'Posted in '+m.step.label+'.'};});
+ await w.send({action:'start',config:pcfg({groupList:[{id:'bakers',name:'Bread Bakers'}]})});await w.run();
+ assert.equal(n,3);assert.equal(w.data.job.done,1);assert.equal(w.data.job.status,'completed');
+});
+test('post to groups: the daily limit pauses before the next post is sent',async()=>{
+ const w=worker();w.data.daily={day:new Date().toDateString(),count:1};w.result(m=>({performed:true,message:'Posted.'}));
+ await w.send({action:'start',config:pcfg({dailyCap:1,ignoreRules:true})});await w.run();assert.match(w.data.job.message,/Daily cap/);assert.equal(w.data.job.status,'paused');
+});
+test('post to groups: automatic mode is refused without the risk confirmation',async()=>{
+ const w=worker();const r=await w.send({action:'start',config:pcfg({postMode:'auto'})});assert.equal(r.ok,false);assert.match(r.error,/risk/);
+});
+test('post to groups: an uncertain automatic post pauses and is not retried',async()=>{
+ const w=worker();let posts=0;w.result(m=>{if(m.step.kind==='gpost'){posts++;return{error:'Post was sent in X but could not be confirmed. Check the group. Aurora will not post it again.'};}return{blocked:false,message:'ok'};});
+ await w.send({action:'start',config:pcfg({postMode:'auto',autoAck:true,dailyCap:5})});await w.run();assert.equal(w.data.job.status,'paused');assert.equal(posts,1);
+});

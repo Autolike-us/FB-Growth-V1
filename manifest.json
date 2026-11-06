@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Aurora • Facebook Studio",
-  "version": "1.2.2",
+  "version": "1.3.0",
   "description": "Personal Facebook post discovery, reactions, follows, comments, friend requests, group joins and shares with preview and local history.",
   "permissions": [
     "storage",
@@ -41,6 +41,7 @@
         "report.js",
         "comments.js",
         "content.js",
+        "groupposts.js",
         "license-config.js",
         "license.js",
         "panel.js"
