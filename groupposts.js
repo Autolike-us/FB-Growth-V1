@@ -251,17 +251,20 @@ function findPick(d,name){
  }
  return innermost(exact)||innermost(part);
 }
-const SHARED=/shared|posted|your post|pending|submitted|sent to/i;
+const SHARED=/shared|posted|your post|your reel|pending|submitted|sent to|view (post|group)|see (post|group)/i;
+const SHARE_FAILED=/couldn.t (share|post)|could not (share|post)|something went wrong|try again|isn.t available|can.t (share|post)|not allowed|error/i;
 const sstate={key:null,startedAt:0};
-async function shareOutcome(H){
- for(let t=0;t<15000;t+=500){
+// The Share window has closed. Look for Facebook's message: success, failure, or nothing at all (then it closed the normal way, which it only does after a share).
+async function shareOutcome(H,{windowClosed=false}={}){
+ for(let t=0;t<(windowClosed?7000:15000);t+=500){
   await H.active(H.id);
   if(D.dialogs().some(d=>/discard|unsaved|leave/i.test(d.innerText||'')))return{unsure:true};
   const toast=norm([...document.querySelectorAll('[role="alert"],[role="status"]')].map(e=>e.innerText||'').join(' '));
+  if(SHARE_FAILED.test(toast)&&!SHARED.test(toast))return{failed:true,text:toast.slice(0,120)};
   if(SHARED.test(toast))return{shared:true,pending:POSTED_PENDING.test(toast)};
   await sleep(500);
  }
- return{shared:false};
+ return windowClosed?{shared:true,unconfirmed:true}:{shared:false};
 }
 async function recordShare(s,key,o){
  const {receipts={}}=await chrome.storage.local.get('receipts');receipts[key]={status:'confirmed',phase:'shared',time:Date.now()};await chrome.storage.local.set({receipts});
@@ -306,7 +309,8 @@ async function sharePair(s,c,H){
   }else T('Share window already open');
   if(!opt)throw Error('Facebook’s share menu has no “Share to a group” option for this item. Nothing was shared. Options seen: '+optionsSeen());
   await active(id);clickLike(opt);T('Share to a group clicked');
-  pk=await until(groupPicker,id,8000);
+  pk=await until(groupPicker,id,6000);
+  if(!pk){const again=groupOption();if(again){T('Share to a group clicked again');await active(id);clickLike(again);pk=await until(groupPicker,id,8000);}}
   if(!pk)throw Error('The group list of the Share window did not open. Nothing was shared. Dialogs: '+D.dialogs().length+'. Options seen: '+optionsSeen());
  }else T('group list already open');
  const sb=searchBox(pk);setSearch(sb,String(s.gname||'').slice(0,40));await sleep(1300);
@@ -326,21 +330,29 @@ async function sharePair(s,c,H){
  for(let t=0;t<20000&&composer();t+=500)await sleep(500);
  sstate.key=null;
  if(composer())throw Error(`Post was pressed for ${where} but the box did not close, so the result is unknown. Check Facebook. Aurora will not share it again.`);
- const o=await shareOutcome(H);
- if(!o.shared)throw Error(`The share to ${where} was sent but could not be confirmed. Check Facebook. Aurora will not share it again.`);
+ const o=await shareOutcome(H,{windowClosed:true});
+ if(o.failed)throw Error(`Facebook showed a problem after the share to ${where}: “${o.text}”. Check Facebook. Aurora will not share it again.`);
  await recordShare(s,key,o);
- return{performed:true,message:o.pending?`Shared to ${where} (the admins must approve it first).`:`Shared to ${where}.`};
+ return{performed:true,message:(o.pending?`Shared to ${where} (the admins must approve it first).`:`Shared to ${where}.`)+(o.unconfirmed?' (Facebook showed no message, but the Share window closed normally.)':'')};
 }
 
 /* ---------- the reels and posts on the person's profile (to choose what to share) ---------- */
 async function listItems(kind,onProgress){
  const map=new Map();let stale=0;
- const read=()=>{for(const a of document.querySelectorAll('a[href]')){
-  const pu=S.postURL(a.href);if(!pu)continue;const isReel=/\/reel\/\d+/.test(pu);if(kind==='reel'?!isReel:isReel)continue;
-  const key=S.pageKey(pu);if(map.has(key))continue;
-  const art=a.closest('[role="article"]')||a.parentElement,img=a.querySelector('img')||art?.querySelector('img');
-  const title=norm((String(art?.innerText||'').split('\n').find(l=>l.trim().length>3&&!/^(like|comment|share|\d)/i.test(l.trim()))||a.getAttribute('aria-label')||'')).slice(0,70);
-  map.set(key,{url:pu,kind,title:title||(isReel?'Reel':'Post'),thumb:String(img?.src||'').slice(0,500)});}};
+ const GENERIC_T=/^(reel tile preview|reel|video|photo|image|unread)$/i;
+ const read=()=>{
+  const root=document.querySelector('[role="main"]')||document.body;
+  for(const a of root.querySelectorAll('a[href]')){
+   // never the notification list or menus ("Unread Your reel is ready to view…"), only tiles on the page itself
+   if(a.closest('[role="navigation"],[role="banner"],[role="dialog"],[role="menu"],[role="complementary"],[aria-label*="Notification" i]'))continue;
+   const pu=S.postURL(a.href);if(!pu)continue;const isReel=/\/reel\/\d+/.test(pu);if(kind==='reel'?!isReel:isReel)continue;
+   const key=S.pageKey(pu);if(map.has(key))continue;
+   const art=a.closest('[role="article"]')||a.parentElement,img=a.querySelector('img')||art?.querySelector('img');
+   if(/(^|\s)(unread|ready to view)/i.test(norm(a.innerText||'')))continue;
+   if(kind==='reel'&&!img&&!a.querySelector('video'))continue;
+   let title=norm((String(art?.innerText||'').split('\n').find(l=>l.trim().length>3&&!/^(like|comment|share|\d)/i.test(l.trim()))||a.getAttribute('aria-label')||img?.alt||'')).slice(0,70);
+   if(GENERIC_T.test(title)||/ready to view/i.test(title))title='';
+   map.set(key,{url:pu,kind,title:title||(isReel?'Reel '+(map.size+1):'Post '+(map.size+1)),thumb:String(img?.src||'').slice(0,500)});}};
  const scroller=()=>[document.scrollingElement,...document.querySelectorAll('[role="main"],div')].find(e=>e&&e.scrollHeight>e.clientHeight+200&&/auto|scroll|visible/.test(getComputedStyle(e).overflowY)&&e.clientHeight>300)||document.scrollingElement;
  for(let i=0;i<30&&stale<4&&map.size<60;i++){const before=map.size;read();stale=map.size===before?stale+1:0;try{onProgress&&onProgress(map.size);}catch{}scroller().scrollBy(0,Math.max(700,innerHeight));window.scrollBy(0,Math.max(700,innerHeight));await sleep(900);}
  read();

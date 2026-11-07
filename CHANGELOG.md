@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.4.4 — Fewer pauses, cleaner reel list
+- Automatic mode no longer pauses after every share when Facebook shows no “Shared” message. If the Share window closed normally, the share counts (with a note). A real error message from Facebook still pauses, and nothing is ever repeated.
+- If the group list does not open after clicking “Share to a group”, Aurora clicks it once more.
+- “My reels” no longer lists notification entries (“Unread Your reel is ready to view…”). Reels with a generic picture label are named “Reel 1”, “Reel 2”…
+
 ## 1.4.3 — Share window group list
 - Fixed: Aurora clicked “Share to a group” but then said the group list did not open. Facebook keeps the caption box of the Share window mounted (hidden) underneath the group list, and Aurora took that for the wrong screen. It now looks for a visible search box instead, so it finds the list.
 - If the Share window or its group list is already open, Aurora carries on from there. Errors now also say how many windows were open and which options were visible.
