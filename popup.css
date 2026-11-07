@@ -46,3 +46,5 @@ footer{font-size:11px;color:var(--muted);text-align:center}
 footer a{color:var(--muted)}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.6}}
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+.showbtn{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--muted,#65676b);margin:2px 0 8px;cursor:pointer}.showbtn input{width:auto}

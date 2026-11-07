@@ -1,0 +1,26 @@
+// Offline check of the floating Aurora button: drag to another corner (remembered), double-click to reset, hide with the × and bring it back.
+const {chromium}=require('playwright'),fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
+const ROOT=path.join(__dirname,'..'),read=n=>fs.readFileSync(path.join(ROOT,n),'utf8');let passed=0;const check=(n,v)=>{assert(v,n);passed++;console.log('PASS '+n);};
+const MOCK=`Element.prototype._as=Element.prototype.attachShadow;Element.prototype.attachShadow=function(o){return this._as({...o,mode:'open'});};
+window.data={};window.ls=[];
+window.chrome={runtime:{id:'x',getManifest:()=>({version:'9'}),sendMessage:async()=>({ok:true}),onMessage:{addListener(){}}},storage:{local:{get:async k=>{const o={};(Array.isArray(k)?k:[k]).forEach(x=>{if(x in data)o[x]=data[x];});return typeof k==='undefined'?{...data}:o;},set:async x=>{const ch={};for(const [k,v] of Object.entries(x)){ch[k]={newValue:v,oldValue:data[k]};data[k]=v;}ls.forEach(f=>f(ch,'local'));},remove:async k=>{const ch={};(Array.isArray(k)?k:[k]).forEach(x=>{ch[x]={oldValue:data[x]};delete data[x];});ls.forEach(f=>f(ch,'local'));}},onChanged:{addListener:f=>ls.push(f)}}};`;
+(async()=>{const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH||'/usr/bin/chromium',headless:true,args:['--no-sandbox']});
+try{const pg=await browser.newPage({viewport:{width:1200,height:800}});pg.on('pageerror',e=>{throw e;});await pg.setContent('<html><body style="height:3000px"></body></html>');
+ await pg.addScriptTag({content:MOCK});await pg.addScriptTag({content:'globalThis.AuroraSelectors={profileName:()=>null};'});await pg.addScriptTag({content:read('report.js')});await pg.addScriptTag({content:read('panel.js')});await pg.waitForTimeout(200);
+ const box=()=>pg.evaluate(()=>{const b=document.getElementById('aurora-panel-host').shadowRoot.getElementById('toggle').getBoundingClientRect();return {x:b.x+b.width/2,y:b.y+b.height/2,r:b.right,b:b.bottom,l:b.left,t:b.top};});
+ const open=()=>pg.evaluate(()=>!document.getElementById('aurora-panel-host').shadowRoot.querySelector('section').hidden);
+ let b=await box();check('starts in the bottom-right corner',b.r>1100&&b.b>650);
+ await pg.mouse.move(b.x,b.y);await pg.mouse.down();await pg.mouse.move(600,300,{steps:5});await pg.mouse.move(150,100,{steps:5});await pg.mouse.up();
+ b=await box();check('dragged to the top-left',b.l<250&&b.t<200);
+ check('dragging does not open the panel',!(await open()));
+ check('position is saved',await pg.evaluate(()=>data.panelPos&&data.panelPos.h==='left'&&data.panelPos.v==='top'));
+ await pg.mouse.click(b.x,b.y);check('a plain click still opens the panel',await open());
+ const below=await pg.evaluate(()=>{const s=document.getElementById('aurora-panel-host').shadowRoot;return s.querySelector('section').getBoundingClientRect().top>s.getElementById('toggle').getBoundingClientRect().top;});check('panel opens below the button when it is at the top',below);
+ await pg.mouse.click(b.x,b.y);
+ await pg.mouse.dblclick(b.x,b.y);b=await box();check('double-click puts it back in the corner',b.r>1100&&b.b>650&&!(await pg.evaluate(()=>'panelPos' in data)));
+ await pg.evaluate(()=>{document.getElementById('aurora-panel-host').shadowRoot.getElementById('hide').click();});
+ check('× hides the button and remembers it',await pg.evaluate(()=>data.panelHidden===true&&getComputedStyle(document.getElementById('aurora-panel-host')).display==='none'));
+ await pg.evaluate(()=>chrome.storage.local.set({panelHidden:false}));
+ check('turning it back on in the toolbar popup shows it again',await pg.evaluate(()=>getComputedStyle(document.getElementById('aurora-panel-host')).display!=='none'));
+ console.log('\n'+passed+' panel-move checks passed');
+}finally{await browser.close();}})().catch(e=>{console.error(e);process.exit(1);});

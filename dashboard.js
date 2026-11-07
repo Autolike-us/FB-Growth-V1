@@ -49,7 +49,7 @@ $('task').onsubmit=async e=>{e.preventDefault();if(!canRun()){notice('Live tasks
  if(ok&&document.body.classList.contains('popup'))setTimeout(()=>window.close(),700);};$('save').onclick=()=>send('save',{config:settings()});
 for(const action of ['pause','resume','stop'])$(action).onclick=()=>send(action);$('bannerResume').onclick=()=>send('resume');$('bannerStop').onclick=()=>send('stop');
 $('theme').onclick=async()=>{document.body.classList.toggle('dark');await chrome.storage.local.set({dark:document.body.classList.contains('dark')});};
-function tab(name){for(const k of ['studio','history','debug']){$(k).hidden=k!==name;$(k+'Tab').classList.toggle('selected',k===name);}if(name==='debug'){renderDebug();ui.debugSeen=Date.now();saveUi();$('debugDot').hidden=true;}}
+function tab(name){for(const k of ['studio','groups','history','debug']){if(!$(k))continue;$(k).hidden=k!==name;$(k+'Tab')?.classList.toggle('selected',k===name);}if(name==='debug'){renderDebug();ui.debugSeen=Date.now();saveUi();$('debugDot').hidden=true;}}
 $('historyTab').onclick=()=>tab('history');$('studioTab').onclick=()=>tab('studio');$('debugTab').onclick=()=>tab('debug');
 async function renderDebug(){$('debugText').textContent=await AuroraReport.build(300);}
 async function copyReport(button,label,lines){const text=await AuroraReport.build(lines);try{await navigator.clipboard.writeText(text);notice('Report copied. Paste it into your message.');button.textContent='Copied ✓';}catch{notice('Could not copy automatically: open the Debug log tab, select the text and copy it.');}setTimeout(()=>{button.textContent=label;},2500);}

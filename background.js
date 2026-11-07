@@ -63,7 +63,7 @@ async function sendStep(job,step){
  try{return await chrome.tabs.sendMessage(job.tabId,msg);}
  catch(err){
   await dlog('warn','Page script not reachable, re-attaching it',String(err?.message||err));
-  try{await chrome.scripting.executeScript({target:{tabId:job.tabId},files:['selectors.js','engine.js','dom.js','comments.js','content.js']});return await chrome.tabs.sendMessage(job.tabId,msg);}
+  try{await chrome.scripting.executeScript({target:{tabId:job.tabId},files:['selectors.js','engine.js','dom.js','comments.js','content.js','groupposts.js']});return await chrome.tabs.sendMessage(job.tabId,msg);}
   catch(err2){throw Error('Facebook content script is unavailable. Refresh the task tab and resume.'+(err2?.message?' ('+String(err2.message).slice(0,120)+')':''));}
  }
 }
@@ -81,12 +81,14 @@ async function tick(){
   // A page opened by numeric ID (profile.php?id=…) is often redirected by Facebook to its username. Follow that redirect instead of stopping.
   if(job.navigation?.target===step.url&&job.navigation.attempts>=2&&['account','feed'].includes(step.kind)){const landed=AuroraSelectors.profileURL(tab.url);if(landed&&AuroraSelectors.profileURL(step.url)&&AuroraSelectors.pageKey(landed)!==AuroraSelectors.pageKey(step.url)){await dlog('info','Facebook redirected '+short(step.url)+' to '+short(landed)+'; continuing there');step.url=landed;job.navigation=null;}}
   if(AuroraSelectors.pageKey(tab.url)!==AuroraSelectors.pageKey(step.url)){
+   // The rules page of a group is optional: if Facebook sends us elsewhere, carry on without it.
+   if(step.kind==='grules'&&job.navigation?.target===step.url&&job.navigation.attempts>=2){job.queue.shift();job.navigation=null;job.message='Could not open the rules of '+(step.label||'a group')+'; continuing.';await save(job);await dlog('warn','Rules page not reachable for '+short(step.url)+'; skipped the rules check');job.nextAt=Date.now()+1000;await save(job);await schedule(job);return;}
    if(job.navigation?.target===step.url&&job.navigation.attempts>=2)throw Error('Facebook redirected away from this target. Check the task tab and resume; Aurora stopped retrying the URL.');
    job.navigation={target:step.url,attempts:job.navigation?.target===step.url?job.navigation.attempts+1:1};job.message='Opening '+step.url;job.nextAt=Date.now()+2000;await save(job);await dlog('info','Opening '+short(step.url)+(job.navigation.attempts>1?` (attempt ${job.navigation.attempts})`:''));await chrome.tabs.update(job.tabId,{url:step.url,active:true});await schedule(job);return;
   }
 
-  const action=['account','engage','feed'].includes(step.kind)&&!job.config.dry;
-  if(action&&job.config.dailyCap&&await dailyCount()>=job.config.dailyCap)throw Error(`Daily cap reached (${job.config.dailyCap} actions today). Resume tomorrow or raise the cap in the studio.`);
+  const action=['account','engage','feed','gpost','mpost','sharepair'].includes(step.kind)&&!job.config.dry;
+  if(action&&job.config.dailyCap&&await dailyCount()+(step.kind==='mpost'?(step.gids||[]).length:1)>job.config.dailyCap)throw Error(`Daily cap reached (${job.config.dailyCap} actions today). Resume tomorrow or raise the cap in the studio.`);
   job.navigation=null;job.message='Reading Facebook: '+step.kind;await save(job);
   if(action){job.inFlight=true;await save(job);}
   await dlog('info',`Step ${step.kind} ${short(step.url)}${job.config.dry?' [preview]':''}`);
@@ -104,10 +106,10 @@ async function tick(){
    if(r.failed){job.failStreak=(job.failStreak||0)+1;if(job.failStreak>=3)throw Error('Three posts in a row could not be handled. Last reason: '+String(r.message||'').replace(/^Skipped: /,''));}else if(r.key)job.failStreak=0;
    if(r.key)(job.seen??=[]).push(r.key);if(r.key)step.examined=(step.examined||0)+1;if(r.performed||r.preview)step.count=(step.count||0)+1;
    if(r.end||(step.count||0)>=job.config.perUser||(step.examined||0)>=job.config.perUser*10+20){job.queue.shift();closeStep(job,step,r);}}
-  else{job.queue.shift();if(step.kind!=='posts')closeStep(job,step,r);more=AuroraEngine.expand(job,step,r);job.queue.unshift(...more);}
+  else{job.queue.shift();if(!['posts','grules'].includes(step.kind))closeStep(job,step,r);more=AuroraEngine.expand(job,step,r);job.queue.unshift(...more);}
   let gap=quick();
   if(step.kind==='posts')job.message=`Discovered ${more.length} ${step.kind==='posts'?'posts':'profiles'}. ${r.note||''}`;
-  else{if(r.performed||r.preview){gap=pause(job);job.done=(job.done||0)+1;if(r.performed){job.counts[job.config.action]++;await bumpDaily();}else job.previewed++;}else if(step.kind!=='feed'||r.key)job.skipped++;job.liked=job.counts.like;job.message=r.message;}
+  else{if(r.performed||r.preview){const inc=Math.max(1,Math.min(9,r.count||1));gap=pause(job);job.done=(job.done||0)+inc;if(r.performed){job.counts[job.config.action]=(job.counts[job.config.action]||0)+inc;for(let i=0;i<inc;i++)await bumpDaily();}else job.previewed+=inc;}else if(step.kind!=='grules'&&(step.kind!=='feed'||r.key))job.skipped++;job.liked=job.counts.like;job.message=r.message;}
   await log(job.message,r.url||step.url);await dlog('info','→ '+job.message,/^Skipped|could not confirm/.test(job.message||'')?ctx(r):undefined);
   if(interrupted){job.message=latest.message+' Last result: '+job.message;await save(job);return;}
   if(!job.queue.length||(job.done||0)>=job.config.limit){await finish(job);return;}
@@ -186,14 +188,65 @@ async function allowReactionRetry(){
  if(receipts[key]?.status!=='attempted')throw Error('No uncertain attempt for the current account and reaction. Confirmed actions are never reset.');
  delete receipts[key];await chrome.storage.local.set({receipts});job.inFlight=false;job.message='You confirmed that no reaction was applied. Press Resume to retry this target once.';await save(job);await dlog('warn','Manual review: allowed retry of the current reaction target');return{ok:true,message:job.message};
 }
+// Reads the names of the groups the person belongs to from facebook.com/groups/joins. It runs on its own (progress and the result are saved for the studio to show)
+// and, when it is done, brings the studio tab back to the front.
+async function loadGroups(dash){
+ const put=o=>chrome.storage.local.set({gpLoad:o});
+ try{
+  await put({state:'running',n:0,time:Date.now()});
+  const tab=await taskTab(base+'groups/joins/');
+  for(let i=0;i<50;i++){const t=await chrome.tabs.get(tab.id);if(t.status==='complete'&&/\/groups\//.test(t.url||''))break;await new Promise(r=>setTimeout(r,500));}
+  await new Promise(r=>setTimeout(r,3500));
+  const ask=()=>chrome.tabs.sendMessage(tab.id,{action:'listGroups'});let r;
+  try{r=await ask();}catch{try{await chrome.scripting.executeScript({target:{tabId:tab.id},files:['selectors.js','engine.js','dom.js','comments.js','content.js','groupposts.js']});r=await ask();}catch{throw Error('Could not read your groups. Refresh the Facebook tab and try again.');}}
+  if(!r||r.error)throw Error(r?.error||'Could not read your groups.');
+  await dlog('info','Loaded '+r.groups.length+' groups',r.diag);
+  if(!r.groups.length)throw Error('No groups were found on the page (it showed '+(r.diag?.groupLinks||0)+' group links). Open facebook.com/groups/joins yourself to check that your groups are listed, then try again. A debug report will show what Aurora saw.');
+  await put({state:'done',n:r.groups.length,groups:r.groups,time:Date.now()});
+ }catch(e){await dlog('error','Loading groups failed: '+e.message);await put({state:'error',error:e.message,time:Date.now()});}
+ finally{try{if(dash?.id){await chrome.tabs.update(dash.id,{active:true});await chrome.windows.update(dash.windowId,{focused:true});}}catch{}}
+}
+// Reads the reels or posts on the person's own profile (to choose what to share). Same idea as loadGroups: runs by itself and brings the studio back.
+async function loadItems(kind,dash){
+ const put=o=>chrome.storage.local.set({gpItemsLoad:{kind,...o}});
+ const urls=kind==='reel'?[base+'me/reels_tab',base+'me/reels/',base+'me/']:[base+'me/'];
+ try{
+  await put({state:'running',n:0,time:Date.now()});
+  let found=null,last=null;
+  for(const url of urls){
+   const tab=await taskTab(url);
+   for(let i=0;i<50;i++){const t=await chrome.tabs.get(tab.id);if(t.status==='complete'&&t.url?.startsWith(base))break;await new Promise(r=>setTimeout(r,500));}
+   await new Promise(r=>setTimeout(r,3500));
+   const ask=()=>chrome.tabs.sendMessage(tab.id,{action:'listItems',kind});let r;
+   try{r=await ask();}catch{try{await chrome.scripting.executeScript({target:{tabId:tab.id},files:['selectors.js','engine.js','dom.js','comments.js','content.js','groupposts.js']});r=await ask();}catch{throw Error('Could not read your profile. Refresh the Facebook tab and try again.');}}
+   if(r?.error)throw Error(r.error);last=r;
+   if(r?.items?.length){found=r;break;}
+  }
+  await dlog('info','Loaded '+(found?.items.length||0)+' '+kind+'s',last?.diag);
+  if(!found)throw Error('No '+(kind==='reel'?'reels':'posts')+' were found on your profile (the page showed '+(last?.diag?.postLinks||0)+' post links). Open your profile yourself to check, or paste the links instead.');
+  await put({state:'done',n:found.items.length,items:found.items,time:Date.now()});
+ }catch(e){await dlog('error','Loading '+kind+'s failed: '+e.message);await put({state:'error',error:e.message,time:Date.now()});}
+ finally{try{if(dash?.id){await chrome.tabs.update(dash.id,{active:true});await chrome.windows.update(dash.windowId,{focused:true});}}catch{}}
+}
 chrome.runtime.onMessage.addListener((m,s,respond)=>{
  if(m.action==='nativeReactionClick'){nativeReactionClick(m,s).then(respond,e=>respond({ok:false,error:e.message,noClick:m.nativeDispatchStarted===false}));return true;}
  const ownPage=[chrome.runtime.getURL('dashboard.html'),chrome.runtime.getURL('popup.html')].includes(s.url?.split(/[?#]/)[0]);
- const panel=s.tab&&s.url?.startsWith(base)&&['openStudio','previewProfile','pause','resume','stop','skipTarget'].includes(m.action);
+ const panel=s.tab&&s.url?.startsWith(base)&&['openStudio','previewProfile','pause','resume','stop','skipTarget','gpProgress'].includes(m.action);
  if(s.id!==chrome.runtime.id||(!ownPage&&!panel)){respond({ok:false,error:'Dashboard commands only.'});return;}
  (async()=>{
   if(m.action==='openStudio'){await chrome.tabs.create({url:chrome.runtime.getURL('dashboard.html')});return{ok:true};}
   if(m.action==='previewProfile')m={action:'start',config:{action:'like',reaction:'👍 Like',mode:'users',target:m.target,perUser:3,limit:3,delay:20,dailyCap:0,exclude:'',dry:true}};
+  if(m.action==='gpProgress'){const key=m.key==='gpItemsLoad'?'gpItemsLoad':'gpLoad';const cur=(await chrome.storage.local.get(key))[key];if(cur?.state==='running')await chrome.storage.local.set({[key]:{...cur,n:Number(m.n)||0,time:Date.now()}});return{ok:true};}
+  if(m.action==='listItems'){
+   const {job}=await chrome.storage.local.get('job');if(['running','paused'].includes(job?.status))throw Error('Stop or finish the current task first: loading your reels and posts uses the Facebook tab.');
+   if(busy)throw Error('A step is finishing. Try again shortly.');
+   loadItems(m.kind==='reel'?'reel':'post',s.tab);return{ok:true,started:true};
+  }
+  if(m.action==='listGroups'){
+   const {job}=await chrome.storage.local.get('job');if(['running','paused'].includes(job?.status))throw Error('Stop or finish the current task first: loading your groups uses the Facebook tab.');
+   if(busy)throw Error('A step is finishing. Try again shortly.');
+   loadGroups(s.tab);return{ok:true,started:true};
+  }
   if(m.action==='recordSuccessfulReaction')return recordSuccessfulReaction();
   if(m.action==='allowReactionRetry')return allowReactionRetry();
   if(m.action==='save'){await chrome.storage.local.set({config:m.config});return{ok:true};}
@@ -202,7 +255,7 @@ chrome.runtime.onMessage.addListener((m,s,respond)=>{
    if(busy)throw Error('A step is finishing. Try again shortly.');const old=(await chrome.storage.local.get('job')).job;if(['running','paused'].includes(old?.status))throw Error('Stop the current task first.');
    const config=AuroraEngine.config(m.config),queue=AuroraEngine.initial(config);if(!config.dry&&config.action==='like'&&config.reaction!=='Like'&&!await chrome.permissions.contains({permissions:['debugger']}))throw Error('Allow native mouse input in the studio to run this reaction.');if(!queue.length)throw Error('All targets are excluded.');
    await chrome.storage.local.set({config:m.config});const tab=await taskTab(queue[0].url);
-   const job={version:4,id:crypto.randomUUID(),config,queue,total:queue.length,finished:[],tabId:tab.id,status:'running',counts:{like:0,follow:0,unfollow:0,comment:0,friend:0,join:0,share:0},done:0,liked:0,previewed:0,skipped:0,seen:[],seenUsers:[],nextAt:Date.now()+2000,message:`${config.dry?'Preview':'Live'} ${config.action} task started. Waiting for Facebook.`};
+   const job={version:4,id:crypto.randomUUID(),config,queue,total:queue.length,finished:[],tabId:tab.id,status:'running',counts:{like:0,follow:0,unfollow:0,comment:0,friend:0,join:0,share:0,post:0,shareg:0},done:0,liked:0,previewed:0,skipped:0,seen:[],seenUsers:[],nextAt:Date.now()+2000,message:`${config.dry?'Preview':'Live'} ${config.action} task started. Waiting for Facebook.`};
    await save(job);await log(job.message);await dlog('info',job.message,{action:config.action,reaction:config.reaction,mode:config.mode,target:String(config.target||'').slice(0,200),limit:config.limit,perUser:config.perUser,scanLimit:config.scanLimit,delay:config.delay,dailyCap:config.dailyCap,preview:config.dry,steps:queue.length});await schedule(job);return{ok:true,message:job.message};
   }
 

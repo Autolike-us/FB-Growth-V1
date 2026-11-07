@@ -57,6 +57,9 @@ async function paint(){
   $('open').classList.toggle('attention',st==='paused');
 }
 $('open').onclick=openDashboard;
+chrome.storage.local.get('panelHidden').then(x=>{$('showBtn').checked=!x.panelHidden;});
+$('showBtn').onchange=()=>chrome.storage.local.set({panelHidden:!$('showBtn').checked});
+chrome.storage.onChanged.addListener((c,a)=>{if(a==='local'&&c.panelHidden)$('showBtn').checked=!c.panelHidden.newValue;});
 $('pause').onclick=()=>control('pause');
 $('stop').onclick=()=>control('stop');
 chrome.storage.onChanged.addListener((ch,area)=>{if(area==='local'&&(ch.job||ch.daily||ch.license||ch.dark||ch.config))paint();});
