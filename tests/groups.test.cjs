@@ -132,7 +132,7 @@ document.getElementById('launch').addEventListener('click',()=>{if(document.quer
 <script>window.model='';window.presses=0;window.chosen='';window.pending=${/PENDING/.test(opts)};
 function draw(){const ed=document.querySelector('[role=textbox]'),pb=document.getElementById('postbtn');if(!ed)return;ed.textContent=window.model;pb.setAttribute('aria-disabled','false');}
 function menu(d){d.innerHTML='<h4>Share</h4><div>Sharing to Feed (Read-only)</div><div role="button" tabindex="0">Share now</div><div role="button" tabindex="0">Share to Feed</div>${/NOGROUP/.test(opts)?'':'<div role="button" id="grp" tabindex="0">Share to a group</div>'}<div role="button" tabindex="0">Send in Messenger</div>';const g=d.querySelector('#grp');if(g)g.addEventListener('click',()=>pick(d));}
-function pick(d){d.innerHTML='<h4>Share to a group</h4><input placeholder="Search for groups"><div id="res"></div>';const res=d.querySelector('#res');
+function pick(d){d.innerHTML='<div aria-hidden="true"><div role="textbox" contenteditable="true" aria-label="Say something about this"></div></div><h4>Share to a group</h4><input type="search" placeholder="Search for groups"><div id="res"></div>';const res=d.querySelector('#res');
  for(const n of ['Bread Bakers','Local Foodies Austin','Austin Small Business Owners']){const li=document.createElement('div');li.setAttribute('role','listitem');const r=document.createElement('div');r.setAttribute('role','button');r.tabIndex=0;r.innerHTML='<span>'+n+'</span><span>Public group</span>';r.addEventListener('click',()=>{window.chosen=n;compose(d);});li.append(r);res.append(li);}
  d.querySelector('input').addEventListener('input',e=>{for(const r of res.children)r.style.display=r.textContent.toLowerCase().includes(e.target.value.toLowerCase())?'':'none';});}
 function compose(d){d.innerHTML='<h4>Share to a group</h4><div role="textbox" contenteditable="true" data-lexical-editor="true" aria-label="Say something about this"></div><div role="button" id="postbtn" aria-disabled="false" tabindex="0">Post</div><div role="button" id="closebtn" tabindex="0">Close</div>';
@@ -140,7 +140,7 @@ function compose(d){d.innerHTML='<h4>Share to a group</h4><div role="textbox" co
  ed.addEventListener('input',e=>{const t=e.inputType,data=e.data;ed.textContent=window.model;setTimeout(()=>{if(t==='insertText')window.model+=data;else if(/^delete/.test(t))window.model=window.model.slice(0,-1);draw();},80);});
  pb.addEventListener('click',()=>{window.presses++;d.remove();setTimeout(()=>{const a=document.createElement('div');a.setAttribute('role','alert');a.textContent=window.pending?'Your post is pending admin approval':'Shared to '+window.chosen;document.body.append(a);},300);});
  d.querySelector('#closebtn').addEventListener('click',()=>d.remove());}
-if(/OPEN/.test('${opts}'))setTimeout(()=>{const d=document.createElement('div');d.setAttribute('role','dialog');document.body.append(d);menu(d);},50);
+if(/OPEN/.test('${opts}'))setTimeout(()=>{const d=document.createElement('div');d.setAttribute('role','dialog');document.body.append(d);/OPENPICK/.test('${opts}')?pick(d):menu(d);},50);
 document.addEventListener('click',e=>{if(e.target.closest('#sharebtn')&&!document.querySelector('[role=dialog]')){const d=document.createElement('div');d.setAttribute('role','dialog');document.body.append(d);menu(d);}});
 </script></body></html>`;
  const REEL='https://www.facebook.com/reel/111';
@@ -164,6 +164,7 @@ document.addEventListener('click',e=>{if(e.target.closest('#sharebtn')&&!documen
  await open(SHAREPAGE('NOSHARE'),REEL);r=await sstep();check('share: an item without a Share button gives a clear error',/Cannot find the Share button/.test(r.error||''));
  await open(SHAREPAGE('COUNTS'),REEL);r=await sstep();check('share: Share buttons labelled with a counter (“Share, 22K shares”) are found; the one on screen is used, not the neighbour below; “Shared with Public” is ignored',r.wait&&(await smodel()).chosen==='Bread Bakers');
  await open(SHAREPAGE('OPEN'),REEL);await pg.waitForTimeout(150);r=await sstep();check('share: if Facebook\u2019s Share window is already open the step carries on from it instead of failing',r.wait&&(await smodel()).chosen==='Bread Bakers');
+ await open(SHAREPAGE('OPENPICK'),REEL);await pg.waitForTimeout(150);r=await sstep();check('share: if the group list is already open (with the caption box still mounted but hidden underneath) the step picks the group from it',r.wait&&(await smodel()).chosen==='Bread Bakers');
  await open(SHAREPAGE('OUTSIDE'),REEL);r=await sstep();check('share: a Share button outside the main area (as on a reel page) is found, and the group row is clicked on the inner button',r.wait&&(await smodel()).chosen==='Bread Bakers');
  await open(SHAREPAGE('NOSHARE'),REEL);r=await sstep();check('share: when the Share button is missing the error lists the buttons Aurora did see, so a report shows what is on the page',/Buttons seen: .*Like.*Comment/.test(r.error||''));
  await open(SHAREPAGE('NOGROUP'),REEL);r=await sstep();check('share: when the menu has no “Share to a group” the error lists the options seen',/Options seen: .*Share to Feed/.test(r.error||''));

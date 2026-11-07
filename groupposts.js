@@ -24,7 +24,7 @@ function launcher(){
  const cands=[...main.querySelectorAll('[role="button"],div[tabindex="0"],span')].filter(e=>!e.closest('[role="dialog"]')&&D.visible(e)&&LAUNCH.test(D.text(e))&&D.text(e).length<80);
  const el=cands[0];return el?(el.closest('[role="button"]')||el):null;
 }
-const composer=()=>D.dialogs().find(d=>d.querySelector('[contenteditable="true"][role="textbox"],textarea'))||null;
+const composer=()=>D.dialogs().find(d=>[...d.querySelectorAll('[contenteditable="true"][role="textbox"],textarea')].some(e=>D.visible(e)))||null;
 const boxOf=d=>d&&[...d.querySelectorAll('[contenteditable="true"][role="textbox"],textarea')].find(e=>D.visible(e))||null;
 const postButton=(d,re=/^post$/i)=>d&&[...d.querySelectorAll('[role="button"],button')].find(b=>D.visible(b)&&re.test(norm(D.text(b)))&&b.getAttribute('aria-disabled')!=='true'&&!b.disabled)||null;
 const boxText=b=>norm(b?('value' in b?b.value:b.textContent):'');
@@ -80,7 +80,7 @@ function findRow(d,name){
  }
  return best;
 }
-const searchBox=d=>d&&d.querySelector('input[type="search"],input[placeholder*="Search" i],input[aria-label*="Search" i],[role="searchbox"]');
+const searchBox=d=>d&&[...d.querySelectorAll('input[type="search"],input[placeholder*="Search" i],input[aria-label*="Search" i],[role="searchbox"]')].find(e=>D.visible(e))||null;
 function setSearch(el,v){if(!el)return;if('value' in el){Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(el,v);el.dispatchEvent(new Event('input',{bubbles:true}));}}
 async function chooseGroups(names,H){
  const {id,T,active}=H;let d=addDialog();if(!d)throw Error('The “Add groups” list did not open. Nothing was posted.');
@@ -241,7 +241,8 @@ function groupOption(){
  return hit?(hit.closest('[role="button"],[role="menuitem"],[role="option"],[role="link"]')||hit):null;
 }
 const optionsSeen=()=>[...new Set([...document.querySelectorAll('[role="dialog"] [role="button"],[role="menu"] *,[role="dialog"] [role="menuitem"]')].filter(e=>D.visible(e)).map(e=>norm(String(e.innerText||'').split('\n')[0]).slice(0,30)).filter(Boolean))].slice(0,20).join(' | ');
-const groupPicker=()=>D.dialogs().find(d=>searchBox(d)&&!d.querySelector('[contenteditable="true"][role="textbox"]'))||null;
+const groupPicker=()=>D.dialogs().find(d=>searchBox(d)&&!composerVisible(d))||null;
+const composerVisible=d=>[...d.querySelectorAll('[contenteditable="true"][role="textbox"],textarea')].some(e=>D.visible(e));
 function findPick(d,name){
  const want=norm(name).toLowerCase();const exact=[],part=[];
  for(const e of d.querySelectorAll('[role="button"],[role="option"],[role="listitem"],[role="radio"],[role="link"],li,a')){
@@ -293,17 +294,21 @@ async function sharePair(s,c,H){
   return{message:`Skipped ${where}: the box was closed and no share was confirmed.`};
  }
  // 1. Share  2. Share to a group  3. pick the group  4. caption
- let opt=groupOption(); // Facebook's Share window may already be open (for example from an earlier try): carry on from it
- if(!opt){
-  const b=await until(shareButton,id,12000);
-  if(!b)throw Error('Cannot find the Share button on this item. Check that it can be shared. Buttons seen: '+buttonsSeen());
-  await active(id);D.reveal(b);await sleep(500);clickLike(b);T('Share clicked');
-  opt=await until(groupOption,id,7000);
- }else T('Share window already open');
- if(!opt)throw Error('Facebook’s share menu has no “Share to a group” option for this item. Nothing was shared. Options seen: '+optionsSeen());
- await active(id);clickLike(opt);T('Share to a group clicked');
- const pk=await until(groupPicker,id,8000);
- if(!pk)throw Error('The group list of the Share window did not open. Nothing was shared.');
+ // Facebook's Share window (or even its group list) may already be open, for example from an earlier try: carry on from wherever it is
+ let pk=groupPicker();
+ if(!pk){
+  let opt=groupOption();
+  if(!opt){
+   const b=await until(shareButton,id,12000);
+   if(!b)throw Error('Cannot find the Share button on this item. Check that it can be shared. Buttons seen: '+buttonsSeen());
+   await active(id);D.reveal(b);await sleep(500);clickLike(b);T('Share clicked');
+   opt=await until(groupOption,id,7000);
+  }else T('Share window already open');
+  if(!opt)throw Error('Facebook’s share menu has no “Share to a group” option for this item. Nothing was shared. Options seen: '+optionsSeen());
+  await active(id);clickLike(opt);T('Share to a group clicked');
+  pk=await until(groupPicker,id,8000);
+  if(!pk)throw Error('The group list of the Share window did not open. Nothing was shared. Dialogs: '+D.dialogs().length+'. Options seen: '+optionsSeen());
+ }else T('group list already open');
  const sb=searchBox(pk);setSearch(sb,String(s.gname||'').slice(0,40));await sleep(1300);
  const hit=findPick(groupPicker()||pk,s.gname||'');
  if(!hit)throw Error(`Could not find the group “${String(s.gname||'').slice(0,40)}” in Facebook’s share list. Nothing was shared.`);

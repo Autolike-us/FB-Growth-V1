@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.4.3 — Share window group list
+- Fixed: Aurora clicked “Share to a group” but then said the group list did not open. Facebook keeps the caption box of the Share window mounted (hidden) underneath the group list, and Aurora took that for the wrong screen. It now looks for a visible search box instead, so it finds the list.
+- If the Share window or its group list is already open, Aurora carries on from there. Errors now also say how many windows were open and which options were visible.
+
 ## 1.4.2 — Share button with a counter
 - Fixed: on reels Facebook labels the Share button with its counter (for example “Share, 22K shares”), which Aurora did not recognise. It does now, and picks the one on screen when the page has several.
 - If Facebook's Share window is already open (for example because you opened it yourself), Aurora carries on from there instead of stopping.
