@@ -28,7 +28,7 @@ section.innerHTML=`<div class="card-head"><h2>Post to groups</h2><span class="hi
 <h3 class="gp-h">3 · Pace &amp; safety</h3>
 <div class="gp-row"><label class="gp-radio"><input type="radio" name="gpMode" value="assist" checked> ✋ <b>Assisted</b> (recommended): Aurora fills the box, you press Post</label><label class="gp-radio"><input type="radio" name="gpMode" value="auto"> ⚡ <b>Automatic</b>: Aurora presses Post too</label></div>
 <div id="gpWarn" hidden class="gp-warn"><b>Before you use Automatic mode</b><p>Facebook's rules do not allow automation, and group posting is closely watched. Your account can be limited (for example blocked from posting in groups) or banned, and group admins can remove you for promotion. Aurora spaces posts out and stops on warnings, but it cannot remove this risk. Assisted mode is much safer.</p><label class="gp-radio"><input type="checkbox" id="gpAck"> I understand and accept this risk.</label></div>
-<div class="gp-row"><div><label for="gpDelay">Wait between groups (minutes)</label><input id="gpDelay" type="number" min="1" max="1440" value="2"></div><div><label for="gpCap">Max groups per day (0 = no limit)</label><input id="gpCap" type="number" min="0" max="50" value="5"></div></div>
+<div class="gp-row"><div><label for="gpDelay">Wait between groups (minutes)</label><input id="gpDelay" type="number" min="1" max="1440" value="2"></div><div><label for="gpCap">Max groups per day (0 = no limit)</label><input id="gpCap" type="number" min="0" max="50" value="0"></div></div>
 <div class="gp-row" id="gpOrderRow" hidden><div><label for="gpOrder">Order of the shares</label><select id="gpOrder"><option value="spread">Spread out: each item to every group, then the next item</option><option value="group">Group by group: all items to one group, then the next group</option></select></div></div>
 <div class="gp-row"><label class="gp-radio"><input type="checkbox" id="gpRules" checked> Read each group's rules first and skip groups that ban promotion</label></div>
 <div id="gpEst" class="gp-note"></div>
@@ -83,7 +83,7 @@ $('gpNone').onclick=()=>{G.sel.clear();paint();};
 $('gpSearch').oninput=e=>{G.q=e.target.value.trim().toLowerCase();paint();};
 $('gpDelay').oninput=$('gpCap').oninput=paintCounts;
 $('gpText').oninput=()=>{for(const t of document.querySelectorAll('#gpVerList textarea')){if(!(t.dataset.t in G.texts))t.value=$('gpText').value;}};
-document.querySelectorAll('input[name=gpMode]').forEach(r=>r.onchange=()=>{if(!G.delayTouched)$('gpDelay').value=mode()==='auto'?5:2;paintCounts();});
+document.querySelectorAll('input[name=gpMode]').forEach(r=>r.onchange=()=>{if(!G.delayTouched)$('gpDelay').value=2;paintCounts();});
 $('gpDelay').addEventListener('input',()=>{G.delayTouched=true;});
 document.querySelectorAll('input[name=gpHow]').forEach(r=>r.onchange=()=>{if(how()==='multi'){document.querySelector('input[name=gpVar][value=same]').checked=true;$('gpAi').hidden=true;}paintCounts();});
 $('gpBatch').oninput=paintCounts;$('gpFilter').onchange=paint;

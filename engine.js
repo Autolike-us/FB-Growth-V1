@@ -14,10 +14,9 @@ globalThis.AuroraEngine={
   c.postHow=c.postHow==='multi'?'multi':'single';c.batchSize=Math.max(2,Math.min(9,Math.round(Number(c.batchSize)||5)));
   if(c.postHow==='multi')c.groupList=c.groupList.map(g=>({...g,text}));
   if(c.postMode==='auto'&&c.autoAck!==true)throw Error('Automatic posting needs your confirmation of the account-risk notice first.');
-  const minDelay=c.dry?5:c.postMode==='auto'?300:60;c.delay=Number(c.delay??600);
-  if(!Number.isInteger(c.delay)||c.delay<minDelay||c.delay>86400)throw Error(`Wait between groups: enter ${minDelay} to 86400 seconds${c.postMode==='auto'?' (at least 5 minutes for automatic posting)':''}.`);
+  const minDelay=c.dry?5:60;c.delay=Number(c.delay??600);
+  if(!Number.isInteger(c.delay)||c.delay<minDelay||c.delay>86400)throw Error(`Wait between groups: enter ${minDelay} to 86400 seconds.`);
   c.dailyCap=Number(c.dailyCap??5);if(!Number.isInteger(c.dailyCap)||c.dailyCap<0||c.dailyCap>50)throw Error('Check dailyCap: enter a whole number from 0 to 50.');
-  if(c.postMode==='auto'&&(c.dailyCap<1||c.dailyCap>15))throw Error('Automatic posting needs a daily limit of 1 to 15 posts.');
   c.postText=text;c.limit=c.groupList.length;c.perUser=1;c.exclude=[];c.comment='';c.commentMany=false;c.reaction='Like';c.ignoreRules=c.ignoreRules===true;c.target='';delete c.commentList;delete c.commentSeed;
   return c;
  },
@@ -34,10 +33,9 @@ globalThis.AuroraEngine={
   c.groupList=c.groupList.map(g=>{const id=String(g?.id||'').trim();if(!/^[\w.\-]{2,100}$/.test(id))throw Error('A chosen group has no valid ID.');if(seen.has(id))return null;seen.add(id);const t=clean(g.text)||caption;if(t.length>2000)throw Error('The caption for '+String(g.name||id).slice(0,60)+' is too long (2000 characters at most).');return{id,name:String(g.name||id).slice(0,120),text:t};}).filter(Boolean);
   c.postMode=c.postMode==='auto'?'auto':'assist';
   if(c.postMode==='auto'&&c.autoAck!==true)throw Error('Automatic sharing needs your confirmation of the account-risk notice first.');
-  const minDelay=c.dry?5:c.postMode==='auto'?300:60;c.delay=Number(c.delay??120);
-  if(!Number.isInteger(c.delay)||c.delay<minDelay||c.delay>86400)throw Error(`Wait between shares: enter ${minDelay} to 86400 seconds${c.postMode==='auto'?' (at least 5 minutes for automatic sharing)':''}.`);
+  const minDelay=c.dry?5:60;c.delay=Number(c.delay??120);
+  if(!Number.isInteger(c.delay)||c.delay<minDelay||c.delay>86400)throw Error(`Wait between shares: enter ${minDelay} to 86400 seconds.`);
   c.dailyCap=Number(c.dailyCap??5);if(!Number.isInteger(c.dailyCap)||c.dailyCap<0||c.dailyCap>50)throw Error('Check dailyCap: enter a whole number from 0 to 50.');
-  if(c.postMode==='auto'&&(c.dailyCap<1||c.dailyCap>15))throw Error('Automatic sharing needs a daily limit of 1 to 15 shares.');
   c.shareOrder=c.shareOrder==='group'?'group':'spread';
   c.limit=c.items.length*c.groupList.length;if(c.limit>300)throw Error('That is '+c.limit+' shares. Choose fewer items or groups (300 at most per task).');
   c.postText=caption;c.perUser=1;c.exclude=[];c.comment='';c.commentMany=false;c.reaction='Like';c.ignoreRules=c.ignoreRules===true;c.target='';delete c.commentList;delete c.commentSeed;

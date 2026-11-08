@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.4.5 — Same calm pace for Automatic
+- Automatic group posting and sharing now use the same 1–2 minute wait as Assisted (default 2 minutes; minimum 1 minute).
+- Automatic mode no longer forces a daily limit. The limit defaults to 0 = no limit; set one only if you want it.
+
 ## 1.4.4 — Fewer pauses, cleaner reel list
 - Automatic mode no longer pauses after every share when Facebook shows no “Shared” message. If the Share window closed normally, the share counts (with a note). A real error message from Facebook still pauses, and nothing is ever repeated.
 - If the group list does not open after clicking “Share to a group”, Aurora clicks it once more.
